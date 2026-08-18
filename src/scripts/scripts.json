@@ -1,0 +1,44 @@
+[
+    {
+        "name": "MDWUI_Config",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Core",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Panels",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Combat",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Comm",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Quests",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Init",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    }
+]
