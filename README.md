@@ -1,4 +1,4 @@
-# MDW_UI - Willowdale MUD UI for Mudlet
+# Willowdale MUD UI for Mudlet
 
 The Willowdale MUD interface for [Mudlet](https://www.mudlet.org/), built on
 [MDW (Mudlet Dockable Widgets)](https://github.com/MorquinDevlar/mdw). It
@@ -28,8 +28,8 @@ Left dock                      Center            Right dock
 
 ## Install
 
-Install both `MDW.mpackage` and `MDW_UI.mpackage` through Mudlet's package
-manager. Install order does not matter - this package follows MDW's
+Install both `MDW.mpackage` and `WillowdaleMUDUI.mpackage` through Mudlet's
+package manager. Install order does not matter - this package follows MDW's
 integration contract (it only seeds tables at load time and MDW invokes it
 whenever its UI builds). Widget arrangement is yours after the first run: MDW
 persists your layout, and the default grouping never overrides it.
@@ -54,7 +54,7 @@ Requires [Muddler](https://github.com/demonnic/muddler):
 muddle
 ```
 
-The built package lands in `./build/MDW_UI.mpackage`.
+The built package lands in `./build/WillowdaleMUDUI.mpackage`.
 
 ## Tests
 

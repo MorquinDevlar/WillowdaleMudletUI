@@ -247,10 +247,11 @@ check(mdw.widgets["Combat"] ~= nil and mdw.widgets["Comm"] ~= nil,
   "widgets rebuilt after an MDW update")
 check(mdw.widgets["Equipment"].stackId ~= nil, "grouping restored after update")
 
--- 11. Uninstalling MDW_UI removes everything ours, leaves MDW running
-raiseEvent("sysUninstallPackage", "MDW_UI")
+-- 11. Uninstalling this package removes everything ours, leaves MDW running.
+-- The event carries the mfile package name - packageName must match it.
+raiseEvent("sysUninstallPackage", mdwui.packageName)
 check(mdw.widgets["Combat"] == nil and mdw.widgets["Comm"] == nil, "our widgets destroyed on uninstall")
-check(mdw.onReady["MDW_UI"] == nil, "onReady registration removed")
+check(mdw.onReady[mdwui.packageName] == nil, "onReady registration removed")
 check(mdw.isSetUp, "MDW itself unaffected")
 
 print("\nSMOKE PASSED")

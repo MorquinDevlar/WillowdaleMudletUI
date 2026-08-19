@@ -17,7 +17,9 @@
 ]]
 
 mdwui = mdwui or {}
-mdwui.packageName = "MDW_UI"
+-- Must match the mfile "package" name exactly: Mudlet reports this name in
+-- sysUninstallPackage, and onUninstall's cleanup only fires on a match.
+mdwui.packageName = "WillowdaleMUDUI"
 
 ---------------------------------------------------------------------------
 -- CONFIGURATION
