@@ -9,7 +9,8 @@ H.homeDir = os.getenv("TMPDIR") or "/tmp"
 
 local MDW_SRC = os.getenv("MDW_SRC") or "../mdw/src/scripts/"
 local MDW_ORDER = { "MDW_Config", "MDW_Helpers", "MDW_Init", "MDW_WidgetCore",
-  "MDW_DockLayout", "MDW_Widget", "MDW_TabbedWidget", "MDW_Stack", "MDW_Menus" }
+  "MDW_DockLayout", "MDW_Widget", "MDW_TabbedWidget", "MDW_Stack", "MDW_Menus",
+  "MDW_Examples" }
 local UI_ORDER = { "MDWUI_Config", "MDWUI_Core", "MDWUI_Panels", "MDWUI_Combat",
   "MDWUI_Comm", "MDWUI_Quests", "MDWUI_Init" }
 
@@ -29,20 +30,27 @@ local function findLink(console, pattern)
   return nil
 end
 
--- 1. Load MDW first, then MDW_UI (the reverse order is exercised implicitly:
--- MDWUI_Config seeds `mdw = mdw or {}` tables that MDW must preserve).
+-- 1. The HARD install path on purpose: MDW boots alone first (demo widgets
+-- and all), then this package installs into the live session. That exercises
+-- the late-join build, the demo-widget takeover, and the live config apply.
+-- The seeds-before-MDW ordering is covered later by the MDW-update step,
+-- which re-runs the registration through a full setup.
 for _, name in ipairs(MDW_ORDER) do
   assert(pcall(dofile, MDW_SRC .. name .. ".lua"), "failed loading " .. name)
 end
+raiseEvent("sysLoadEvent")
+H.flushTimers()
+check(mdw.isSetUp, "MDW sets up alone with its demo widgets")
+check(mdw.widgets["Items"] ~= nil, "demo widgets present before our install")
+check(mdw.widgets["Comm"].tabsByName["Tell"] ~= nil, "demo Comm carries its own tab set")
+
 for _, name in ipairs(UI_ORDER) do
   assert(pcall(dofile, "src/scripts/" .. name .. ".lua"), "failed loading " .. name)
 end
-
-raiseEvent("sysLoadEvent")
-H.flushTimers()
-check(mdw.isSetUp, "MDW setup completes with MDW_UI registered")
-check(mdw.widgets["Items"] == nil, "MDW examples suppressed by loadExamples seed")
-check(mdw.config.usePromptTrigger == false, "gameConfig seed disabled the prompt trigger")
+check(mdw.widgets["Items"] == nil, "demo-only widget destroyed by mid-session install")
+check(mdw.widgets["Comm"].tabsByName["Global"] ~= nil and mdw.widgets["Comm"].tabsByName["Tell"] == nil,
+  "demo Comm replaced with our channel tabs")
+check(mdw.config.usePromptTrigger == false, "prompt trigger disabled live on mid-session install")
 
 -- 2. Layout: every widget exists and the default groups match the web client
 for _, name in ipairs({ "Affects", "Keyring", "Equipment", "Inventory", "Forage",
@@ -246,6 +254,7 @@ H.flushTimers()
 check(mdw.widgets["Combat"] ~= nil and mdw.widgets["Comm"] ~= nil,
   "widgets rebuilt after an MDW update")
 check(mdw.widgets["Equipment"].stackId ~= nil, "grouping restored after update")
+check(mdw.widgets["Items"] == nil, "demo widgets stay suppressed across MDW updates")
 
 -- 11. Uninstalling this package removes everything ours, leaves MDW running.
 -- The event carries the mfile package name - packageName must match it.

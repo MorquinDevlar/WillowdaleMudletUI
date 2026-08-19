@@ -60,6 +60,26 @@ end
 function mdwui.buildUI()
   mdwui.killAllTimers()
 
+  -- MDW's demo widgets share names with ours ("Affects", "Map", "Comm") and
+  -- already exist when this package installs MID-SESSION - the
+  -- loadExamples=false seed only stops future setups. Widget:new would hand
+  -- us the demo instead (worst case the demo Comm, whose different tab set
+  -- would silently eat our Global/Tells routing), so clear demo leftovers we
+  -- did not create ourselves. "Items" is demo-only and would linger otherwise.
+  for _, name in ipairs({ "Items", "Affects", "Map", "Comm" }) do
+    local existing = mdw.widgets[name]
+    if existing and not mdwui.state.widgets[name] and existing.destroy then
+      existing:destroy()
+    end
+  end
+
+  -- The gameConfig seed merges only during MDW setup; a mid-session install
+  -- builds without one, so apply the live-critical setting directly
+  -- (configure re-applies it immediately; harmless when already merged).
+  if mdw.configure then
+    mdw.configure({ usePromptTrigger = false })
+  end
+
   local defs = {
     -- name, renderer, constructor options (creation order = default row order)
     { "Affects", mdwui.renderAffects, { dock = "left" } },
