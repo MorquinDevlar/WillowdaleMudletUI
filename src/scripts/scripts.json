@@ -36,6 +36,24 @@
         "isFolder": "no"
     },
     {
+        "name": "MDWUI_Journal",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Keys",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
+        "name": "MDWUI_Commands",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
         "name": "MDWUI_Init",
         "isActive": "yes",
         "script": "",

@@ -1,4 +1,4 @@
-# Willowdale MUD UI (WillowdaleMUDUI) for Mudlet
+# Willowdale MUD UI (WillowdaleMudletUI) for Mudlet
 
 A Mudlet package that recreates the Willowdale web client's widgets on top of
 MDW (Mudlet Dockable Widgets). Lua 5.1 only (Mudlet's runtime) - no goto, no
@@ -32,6 +32,13 @@ reports that name in sysUninstallPackage, and cleanup only fires on a match.
 Consequence: `mdwui.buildUI()` must stay idempotent - `Widget:new` returns
 existing widgets, and re-running must not duplicate anything.
 
+MDW >= `mdwui.minMdwVersion` (0.4.0) is a HARD requirement, gated ONCE at the
+top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
+so a refused build leaves the session untouched - instead of guarding every
+MDW 0.4 call site. Bump the constant when adopting a newer MDW API. The `ui`
+command dispatcher keeps its per-capability guards regardless: the alias is
+installed even when the build was refused under an old MDW.
+
 ## Rendering architecture (the rules that look like accidents)
 
 - Panels are PURE FUNCTIONS of Mudlet's `gmcp` table: clear the console,
@@ -56,7 +63,65 @@ existing widgets, and re-running must not duplicate anything.
 Every event handler, timer, and widget goes through `mdwui.registerHandler` /
 `mdwui.addTimer` / `mdwui.state.widgets`, so `mdwui.onUninstall` can remove
 every trace while leaving MDW itself running. Anything registered another way
-will leak across uninstalls.
+will leak across uninstalls. MDW ALSO reaps our creations by ownership stamp
+(everything built inside the onReady callback), but our own handler stays -
+it is what covers older MDW versions and handler-order races, and it must
+remove ALL our registrations: onReady, onTeardown, gamePackages, the top bar.
+The `mdw.onTeardown` hook kills our timers at every MDW teardown so the
+affects ticker never outlives its widget. Numpad walking is the package's own
+native key folder (`src/keys`), which Mudlet installs and removes with the
+package; this package binds no temp keys at all, so there is nothing
+key-related to collect at teardown or uninstall.
+
+## Keyboard command surface (`ui`)
+
+`MDWUI_Commands.lua` holds the dispatcher `mdwui.command(line)`; `src/aliases`
+holds the only shipped alias, a one-line shim into it. The alias and the smoke
+suite both enter through that one function, so a check against
+`mdwui.command` is a check against what the player types. It must
+NEVER `send()` unknown input - the server has no `ui` command - and every MDW
+0.4 capability it calls is guarded on existence (`capability("focusWidget")`),
+the same style as the rest of this package. All output goes to the MAIN
+console - that is where a screen reader is reading - and this module alone
+speaks `cecho`/`cechoLink` with Mudlet's NAMED colours (its local `P` table);
+the widget renderers keep `decho` and the RGB palette transcribed from the web
+CSS. Angle-bracket placeholders (`ui show <widget>`) are safe in that output:
+Mudlet prints an unrecognised tag literally, so only `<r> <b> <i> <u> <s> <o>`
+and real colour names must be avoided - text from the GAME still goes through
+`plain()`, since a quest title could contain either. The overview and
+`ui help <verb>` come from ONE source: the `OVERVIEW` table for the screen,
+the command table's own `usage`/`help` for the detail, so a new verb cannot be
+listed in one and missing from the other. The overview is a config-style status
+table (OVERVIEW sections of {cmd, link, opts, value getter}): command, live
+value, options; the on/off section comes first and the options column
+word-wraps at 80 columns. A new verb gets a row there, with a value getter when
+it has a state.
+Widgets resolve as `mdwui.widgetSynonyms` first, then `mdw.findWidget` (exact
+name, exact title, unique prefix), and print by TITLE - group names never
+reach the player. Numpad walking ships as native Mudlet keys -
+`src/keys/keys.json` (the `Numpad Walking` folder) and
+`src/keys/Numpad Walking/keys.json` (keypad 1-9, minus, plus: NumLock-on codes
+ONLY, because macOS stamps the Keypad modifier on the arrow keys too) - and
+`ui numpad` just flips that folder with `enableKey`/`disableKey`;
+`mdwui.config.numpadKeyFolder` must equal the folder name, and the smoke suite
+checks the JSON against the web client's `codeShortcuts`.
+`mdwui.applyNumpadKeys` (called from `buildUI`) re-applies the folder's on/off
+state on every build. Rule: every new widget or player-facing toggle gets a
+`ui` verb and a smoke check in the same change.
+
+## Version exposure (Willowdale package convention)
+
+Every Willowdale package exposes `<ns>.version` as a plain string matching
+its mfile "version", assigned at script-load time: `mdw.version`,
+`mdwui.version`, `mapper.version` (the mapper's is build-substituted from
+`__VERSION__`). Read another package's version only at runtime and guarded -
+`(mapper and mapper.version) or "-"` - never at load time. The smoke suite
+enforces that `mdwui.version` matches the mfile; bump them together. The top
+bar (`WillowdaleTop`, MDW `createBar`) renders Char.Info name/class and the
+connection timer left-aligned, and the UI, MDW and mapper versions
+right-aligned - padded to the bar console's wrap width (the same
+`mdw.calculateWrap` MDW applies to it) and repainted by the 1s ticker, which
+is also how it catches up after resizes.
 
 ## Verification (all three before calling work done)
 

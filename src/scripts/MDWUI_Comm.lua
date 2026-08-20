@@ -39,7 +39,7 @@ end
 function mdwui.onCommHistory()
   local widget = mdw and mdw.widgets and mdw.widgets["Comm"]
   if not widget or not widget.clearAll then return end
-  local history = (gmcp and gmcp.Comm and gmcp.Comm.History) or {}
+  local history = mdwui.tbl(gmcp and gmcp.Comm and gmcp.Comm.History)
   widget:clearAll()
   for _, msg in ipairs(history) do
     mdwui.appendCommMessage(msg)

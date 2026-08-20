@@ -11,14 +11,31 @@ globals = {
 
 read_globals = {
   "ansi2decho",
+  -- Main-console output for the `ui` command (results, listings, and the
+  -- overview's clickable command lines). Named colours there, not the
+  -- widgets' decho triplets - see MDWUI_Commands.lua's header.
+  "cecho",
+  "cechoLink",
+  "echo",
+  -- The alias's capture groups (src/aliases/ui.lua).
+  "matches",
+  -- Mudlet's JSON decoder (LuaGlobal.lua aliases yajl.to_value); read
+  -- guarded, so an older Mudlet without it degrades instead of erroring.
+  "json_to_value",
   "deleteNamedEventHandler",
   "getMudletHomeDir",
+  -- Native key folder toggle (numpad walking ships in src/keys); read guarded.
+  "enableKey",
+  "disableKey",
   "killTimer",
   "registerNamedEventHandler",
   "send",
   "sendGMCP",
   "tempTimer",
   gmcp = { other_fields = true },
+  -- Sibling Willowdale package (version-exposure convention); read guarded,
+  -- never assumed installed.
+  mapper = { other_fields = true },
 }
 
 ignore = {
