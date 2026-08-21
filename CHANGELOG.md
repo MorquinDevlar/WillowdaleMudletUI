@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- Updating no longer fails silently. The install now waits for Mudlet to
+  actually release the old package instead of guessing at a delay, so it goes
+  in as soon as the client is ready rather than being refused without a word.
+  The same fix covers installing a newer MDW over an older one.
+
 ## 0.1.3 - 2026-08-21
 
 ### Added

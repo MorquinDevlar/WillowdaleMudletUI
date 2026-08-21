@@ -1966,6 +1966,44 @@ H.flushTimers()
 check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
   "the install timer, created AFTER the uninstall, survived the teardown that killed our timers")
 
+-- The race that cost a live player their UI: Mudlet had not released the name
+-- by the time the install ran, installPackage refused, and it reports that by
+-- returning rather than raising - so the failure was silent and the watchdog
+-- only spoke twenty seconds later. The install now waits for the name to leave
+-- getPackages, and nothing about it is a guess.
+local mdwVersionForRace = mdw.version
+mdw.version = "0.4.0" -- too old, so the bootstrap actually fetches
+H.packages = { "MDW" }
+H.holdPackage = true  -- Mudlet still holds it: the teardown is not finished
+mdwui.state.mdwFetchedThisSession = nil
+mdwui.state.mdwFile = nil
+mdwui.state.updateBusyAt = nil
+local downloadsBeforeHeld = #H.downloads
+mdwui.ensureMdw()
+check(#H.downloads == downloadsBeforeHeld + 1, "an MDW below the minimum is fetched again")
+local heldPath = H.downloads[#H.downloads].path
+writeFile(heldPath, PACKAGE_BYTES)
+local heldInstalls = #H.installed
+raiseEvent("sysDownloadDone", heldPath)
+H.flushTimers()
+check(#H.installed == heldInstalls,
+  "while Mudlet still holds the name, the install is not attempted at all")
+H.flushTimers()
+check(#H.installed == heldInstalls, "and it keeps waiting rather than failing silently")
+-- Mudlet lets go: the very next poll installs, with no fixed delay to sit out.
+H.holdPackage = nil
+H.packages = {}
+H.flushTimers()
+check(H.installed[#H.installed] == heldPath and #H.installed == heldInstalls + 1,
+  "the moment the name is released, the install goes in")
+raiseEvent("sysInstallPackage", "MDW")
+check(mdwui.state.mdwFile == nil, "and sysInstallPackage stops the retry - the event is the signal")
+local afterDone = #H.installed
+H.flushTimers()
+H.flushTimers()
+check(#H.installed == afterDone, "a completed install is never attempted twice")
+mdw.version = mdwVersionForRace
+
 -- Mudlet unpacks the new MDW, runs its scripts, then raises sysInstallPackage.
 -- Nothing in this package activates anything: MDW's install runs setup ->
 -- onReady -> buildUI, and our onReady seed was there the whole time.

@@ -379,6 +379,17 @@ function getModulePath(name) return H.modulePaths[name] end
 function reloadModule(name) H.reloaded[#H.reloaded + 1] = name return true end
 function uninstallPackage(name)
   H.uninstalled[#H.uninstalled + 1] = name
+  -- Real Mudlet stops reporting the name from getPackages once it is gone, and
+  -- REFUSES to install over a name it still holds. Modelling only the event and
+  -- not the release is what let a swap that installs too early pass this suite
+  -- while failing in a live client, so the release is modelled here too.
+  -- H.holdPackage lets a test keep the name held, which is how the swap's
+  -- wait-for-release is exercised.
+  if not H.holdPackage then
+    for i, held in ipairs(H.packages) do
+      if held == name then table.remove(H.packages, i) break end
+    end
+  end
   raiseEvent("sysUninstallPackage", name)
 end
 local function cbSet(kind)
