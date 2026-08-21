@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.13 - 2026-08-22
+
 ### Changed
 - Updates are now carried out by MDW rather than by the UI replacing itself,
   so a refused install is reported at once instead of after a twenty-second
