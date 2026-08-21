@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.3 - 2026-08-21
+
 ### Added
 - The game can now ask the UI to remove itself, or to check for an update, and
   the UI does it.
