@@ -338,7 +338,37 @@ function disableKey(name)
   H.nativeKeys[name] = false
   return true
 end
-function uninstallPackage(name) raiseEvent("sysUninstallPackage", name) end
+-- Package/module plumbing and the downloader (the self-updater's world).
+-- Downloads are RECORDED, never performed, and installPackage does not raise
+-- sysInstallPackage: the suite writes the file it wants and raises the events
+-- itself, which is the only way to drive a verify-then-swap flow (and its
+-- watchdog) deterministically. uninstallPackage keeps raising, because our
+-- own cleanup runs inside that call in real Mudlet too.
+H.downloads = {}    -- { path, url } per downloadFile call
+H.installed = {}    -- paths passed to installPackage
+H.uninstalled = {}  -- package names passed to uninstallPackage
+H.reloaded = {}     -- package names passed to reloadModule
+H.modulePaths = {}  -- package name -> module file, when installed as a module
+H.packages = {}     -- installed package names, as getPackages reports them
+function downloadFile(path, url)
+  H.downloads[#H.downloads + 1] = { path = path, url = url }
+  return true
+end
+function installPackage(path)
+  H.installed[#H.installed + 1] = path
+  return true
+end
+function getPackages()
+  local out = {}
+  for i, name in ipairs(H.packages) do out[i] = name end
+  return out
+end
+function getModulePath(name) return H.modulePaths[name] end
+function reloadModule(name) H.reloaded[#H.reloaded + 1] = name return true end
+function uninstallPackage(name)
+  H.uninstalled[#H.uninstalled + 1] = name
+  raiseEvent("sysUninstallPackage", name)
+end
 local function cbSet(kind)
   return function(name, fn)
     H.callbacks[name] = H.callbacks[name] or {}

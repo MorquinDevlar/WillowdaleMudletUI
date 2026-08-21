@@ -24,6 +24,14 @@ read_globals = {
   "json_to_value",
   "deleteNamedEventHandler",
   "getMudletHomeDir",
+  -- The self-updater (MDWUI_Update.lua): Mudlet's asynchronous downloader and
+  -- the package/module installers. downloadFile is read guarded, the rest are
+  -- only ever reached after it answered.
+  "downloadFile",
+  "installPackage",
+  "uninstallPackage",
+  "getModulePath",
+  "reloadModule",
   -- Native key folder toggle (numpad walking ships in src/keys); read guarded.
   "enableKey",
   "disableKey",

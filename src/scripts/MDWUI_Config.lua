@@ -9,9 +9,9 @@
   matter which package loads or installs first. MDW runs mdwui.buildUI()
   every time it builds its UI, including after MDW package updates.
 
-  Data contract: documentation/Mudlet_Widget_GMCP_Guide.md in the
-  WillowdaleMUD repo describes every GMCP package, field, and cadence this
-  UI consumes. Field names below mirror that guide exactly.
+  Data contract: the game's Mudlet widget GMCP guide describes every GMCP
+  package, field, and cadence this UI consumes. Field names below mirror
+  that guide exactly.
 
   Dependencies: none (root module of this package).
 ]]
@@ -32,6 +32,20 @@ mdwui.version = "0.1.0"
 -- minimum instead of guarding every call. mdw.version exists from MDW 0.3.0
 -- on, so nil means an older MDW still. Bump when we adopt a newer MDW API.
 mdwui.minMdwVersion = "0.4.0"
+
+-- Where the self-updater (MDWUI_Update.lua) looks. The feed is the package's
+-- OWN CHANGELOG.md, read raw from the default branch; it carries no URLs, so
+-- these three lines are the only place a release can be pointed at.
+--
+-- The tag format (v<version>) and the asset basename (the package name) are a
+-- RELEASE CONTRACT shared with tools/release.sh: the updater builds the
+-- download URL from them rather than reading one, so a release published
+-- under a different tag or asset name is a release no player can install.
+-- Change one side and the other has to change with it.
+mdwui.repoSlug = "MorquinDevlar/WillowdaleMudletUI"
+mdwui.changelogUrl = "https://raw.githubusercontent.com/" .. mdwui.repoSlug .. "/main/CHANGELOG.md"
+mdwui.releaseUrlFormat = "https://github.com/" .. mdwui.repoSlug
+  .. "/releases/download/v%s/" .. mdwui.packageName .. ".mpackage"
 
 ---------------------------------------------------------------------------
 -- CONFIGURATION
@@ -221,6 +235,14 @@ mdwui.state = mdwui.state or {
   -- installs.
   -- hpFillCss / balFillCss (runtime): last-applied prompt-gauge fill
   -- styles, so the per-payload updates only restyle on a band crossing
+  -- Self-update keys (MDWUI_Update, all runtime): updateBusyAt (os.time() of
+  -- the download in flight - a timestamp, so a stalled one goes stale),
+  -- updateFeedPath / updateFile / updateUrl (what we asked for, matched
+  -- against sysDownloadDone's path), updateVersion (the release on offer),
+  -- updateManual (`ui update` speaks even with nothing to say; the session
+  -- check does not), updateCheckedThisSession, and updateInstalled - the
+  -- all-clear the watchdog reads, which only works because this table
+  -- survives the package swap in the Lua state.
 }
 
 ---------------------------------------------------------------------------

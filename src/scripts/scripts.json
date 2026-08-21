@@ -48,6 +48,12 @@
         "isFolder": "no"
     },
     {
+        "name": "MDWUI_Update",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
         "name": "MDWUI_Commands",
         "isActive": "yes",
         "script": "",

@@ -3,13 +3,15 @@
   The `ui` command: this whole interface under keyboard control.
 
   Why it exists: everything the mouse can do to the UI - reveal a widget,
-  regroup it, resize a dock, switch a channel tab, page the journal - a
-  keyboard-only or screen-reader player must be able to do too. One dispatcher
-  (mdwui.command) serves both callers: the shipped `ui` alias, and the smoke
-  suite, which drives it directly with no Qt in the room.
+  regroup it, resize a dock, switch a channel tab, page the journal - must be
+  doable from the keyboard too, for the many players who would rather not let
+  go of it mid-session. One dispatcher (mdwui.command) serves both callers:
+  the shipped `ui` alias, and the smoke suite, which drives it directly with
+  no Qt in the room.
 
-  Output goes to the MAIN console, never into a widget: that is where a screen
-  reader is reading and where a keyboard user's eyes already are. The layout
+  Output goes to the MAIN console, never into a widget: it is where the
+  command was typed, it survives whatever the player has hidden or closed,
+  and it scrolls, searches and copies like the rest of the session. The layout
   work itself belongs to MDW's set-semantics capability functions (0.4+); every
   one is looked up guarded, so an older MDW answers with a message instead of
   an error - the same style as the rest of this package.
@@ -316,8 +318,8 @@ local COMBAT_KEYS = { "hp", "ae", "balance", "enemy", "info" }
 local JOURNAL_CATEGORIES = { "books", "documents", "quests", "rumors", "observations", "notes" }
 
 --- Print one settings section as `key on  key off ...`. The colour goes on
--- the whole pair, not between the words: a screen reader and a plain-text
--- grep both want "worth on" to read as two adjacent words. Green/red is the
+-- the whole pair, not between the words: split colour would break "worth on"
+-- into two separately painted words instead of one readable phrase. Green/red is the
 -- game's own config palette, so `ui prompt`, `ui combat` and the overview's
 -- value column answer the same question in the same two colours.
 local function showToggles(label, keys, settings)
@@ -763,7 +765,8 @@ COMMANDS = {
 
   { name = "read",
     usage = "ui read <widget>",
-    help = "Print a widget's current text to the main console, where a screen reader can reach it.",
+    help = "Print a widget's current text to the main console, where it can be scrolled, "
+      .. "searched and copied like any other output.",
     run = function(words)
       local w = mdwui.resolveWidget(rest(words, 2))
       if not w then return end
@@ -1238,6 +1241,26 @@ COMMANDS = {
       mdwui.say(all and "Layout and settings reset." or "Layout reset.")
     end },
 
+  { name = "update",
+    usage = "ui update [install]",
+    help = "Check GitHub for a newer Willowdale UI and offer to install it. The UI checks once "
+      .. "on its own when it builds; nothing is downloaded until you ask. `ui update install` "
+      .. "takes the offer from the keyboard, for anyone who cannot click its link.",
+    run = function(words)
+      local arg = words[2]
+      if not arg then
+        mdwui.checkForUpdate(true)
+        return
+      end
+      -- Prefix-matched like every other word in this surface, so `ui update i`
+      -- works the way `ui sh que` does.
+      if ("install"):find(arg:lower(), 1, true) == 1 then
+        mdwui.installUpdate()
+      else
+        mdwui.say("Say install, or nothing at all - not '" .. plain(arg) .. "'.")
+      end
+    end },
+
   { name = "rebuild",
     usage = "ui rebuild",
     help = "Tear the UI down and build it again, keeping your layout. The recovery hatch.",
@@ -1463,6 +1486,10 @@ local OVERVIEW = {
     { cmd = "debug", link = "debug", opts = "[gmcp [<path>]]   diagnostics, or a GMCP dump" },
     { cmd = "reset", link = "reset", opts = "[all] confirm   the default layout (all: settings too)" },
     { cmd = "rebuild", link = "rebuild", opts = "rebuild the UI in place" },
+    -- The value is the version the row would replace, which is the one thing
+    -- a player wants to see before asking GitHub anything.
+    { cmd = "update", link = "update", opts = "[install]   check GitHub for a newer UI, or take the offer",
+      value = function() return tostring(mdwui.version) end },
     { cmd = "help", link = "help", opts = "<command>   what one command does" },
   } },
 }

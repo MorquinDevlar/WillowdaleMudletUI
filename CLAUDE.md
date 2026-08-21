@@ -9,16 +9,18 @@ integer division, no 5.2+ stdlib.
 - `../mdw` - the MDW framework this package consumes. Never put game-specific
   code there; if MDW lacks an API this package needs, add it to MDW as a
   general capability (e.g. `addToStack` migration was added for this package).
-- `../WillowdaleMUD` - the game server. Two things in it are authoritative:
-  - `documentation/Mudlet_Widget_GMCP_Guide.md` - THE data contract. Read it
-    before touching any GMCP handling. Every field name, cadence, and edge
-    case in this package comes from it; renderer comments cite its section
-    numbers. Never invent or rename a GMCP field - they are the exact
-    snake_case wire names from the Go structs.
-  - `_datafiles/html/public/static/webclient/js/gmcp-ui.js` and
-    `dockview-widgets.js` - the reference implementation. When a behavior
-    question comes up (channel routing, combat status text, auto-target,
-    unread logic), match what the web client does.
+- The game server's own checkout, alongside these two. Not public, so never
+  cite it by name or path in anything that ships. Two things in it are
+  authoritative:
+  - The Mudlet widget GMCP guide - THE data contract. Read it before touching
+    any GMCP handling. Every field name, cadence, and edge case in this
+    package comes from it; renderer comments cite its section numbers. Never
+    invent or rename a GMCP field - they are the exact snake_case wire names
+    from the Go structs.
+  - The web client's `gmcp-ui.js` and `dockview-widgets.js` - the reference
+    implementation. When a behavior question comes up (channel routing,
+    combat status text, auto-target, unread logic), match what the web client
+    does.
 
 ## The MDW integration contract (why load order never matters)
 
@@ -82,10 +84,13 @@ suite both enter through that one function, so a check against
 NEVER `send()` unknown input - the server has no `ui` command - and every MDW
 0.4 capability it calls is guarded on existence (`capability("focusWidget")`),
 the same style as the rest of this package. All output goes to the MAIN
-console - that is where a screen reader is reading - and this module alone
-speaks `cecho`/`cechoLink` with Mudlet's NAMED colours (its local `P` table);
-the widget renderers keep `decho` and the RGB palette transcribed from the web
-CSS. Angle-bracket placeholders (`ui show <widget>`) are safe in that output:
+console - the surface is typed, so its answers belong in the stream the
+player typed into, not in a widget that may be hidden or closed - and it
+speaks
+`cecho`/`cechoLink` with Mudlet's NAMED colours (its local `P` table).
+`MDWUI_Update.lua` is the only other module that does, for the same reason and
+with its own `P`; the widget renderers keep `decho` and the RGB palette
+transcribed from the web CSS. Angle-bracket placeholders (`ui show <widget>`) are safe in that output:
 Mudlet prints an unrecognised tag literally, so only `<r> <b> <i> <u> <s> <o>`
 and real colour names must be avoided - text from the GAME still goes through
 `plain()`, since a quest title could contain either. The overview and
@@ -128,7 +133,7 @@ is also how it catches up after resizes.
 ```bash
 lua5.1 tests/smoke.lua                      # from repo root; needs ../mdw
 ~/.luarocks/bin/luacheck src/ tests/        # must be 0 warnings
-muddle                                      # builds build/MDW_UI.mpackage
+muddle                                      # builds build/WillowdaleMudletUI.mpackage
 ```
 
 The smoke suite runs the real MDW + this package against `tests/stub_mudlet.lua`
@@ -136,6 +141,61 @@ The smoke suite runs the real MDW + this package against `tests/stub_mudlet.lua`
 behavior change; if new code uses a Mudlet API the stub lacks, extend the stub.
 The harness cannot validate Qt rendering or real GMCP framing - flag when a
 change needs a live Mudlet test against the game.
+
+## Releases and self-update
+
+Changelog entries land under `## Unreleased` in `CHANGELOG.md` in the same
+commit as the change, player-facing only - so the notes for a release exist
+before the release does. `tools/release.sh X.Y.Z` is the ONLY way a release is
+cut: it bumps `mfile` and `mdwui.version` together (the smoke suite asserts
+they match), promotes `## Unreleased` to `## X.Y.Z - <date>`, runs the three
+verification steps, commits "Release X.Y.Z", tags `vX.Y.Z`, pushes main, and
+publishes the GitHub release with `build/WillowdaleMudletUI.mpackage`
+attached. An empty `## Unreleased` is a hard stop, and any failure from the
+bump onwards restores the tree. Never bump a version, tag, or publish by hand,
+and never commit `build/` - it is gitignored.
+
+The tag format `vX.Y.Z` and the asset basename `WillowdaleMudletUI.mpackage`
+are a CONTRACT, because the updater in `MDWUI_Update.lua` constructs rather
+than discovers:
+
+- it fetches `CHANGELOG.md` raw from main
+  (`https://raw.githubusercontent.com/MorquinDevlar/WillowdaleMudletUI/main/CHANGELOG.md`)
+  and parses `## X.Y.Z - date` headings. `## Unreleased` deliberately does not
+  match that pattern, which is exactly why unreleased notes are invisible to
+  players;
+- it compares the newest such version against `mdwui.version` with the
+  existing `mdwui.versionAtLeast` - no second comparison implementation;
+- it derives the download URL from that version by convention:
+  `.../releases/download/vX.Y.Z/WillowdaleMudletUI.mpackage`.
+
+Rename the tag scheme, the asset, or the changelog and every installed client
+silently loses its update path - they have no other way to find a release.
+
+The updater's own invariants, none of them obvious from the code:
+`mdwui.state`'s `update*` keys are read across the swap - the watchdog armed by
+the OLD script run is what the NEW one silences by setting `updateInstalled`,
+so those keys must stay on `mdwui.state` (seeded with `or`) rather than in a
+module local. Both of the swap's timers are created AFTER `uninstallPackage`,
+because our own cleanup runs inside that call and `killAllTimers` would
+otherwise take the pending install with it. The in-flight guard is a TIMESTAMP
+with a 60s staleness window, never a boolean: Mudlet does not raise
+`sysDownloadDone` or `sysDownloadError` in every failure mode, and a boolean
+would wedge the checker for the session. Changelog text is REMOTE text and
+goes through `plain()` like anything from the game.
+
+Update checking has deliberately NO periodic timer: once per session from
+`buildUI`, plus on demand via `ui update`. A player who wants a poll can type
+one. The install is reachable BOTH ways - the offer's `[Install update now]`
+link and `ui update install` - because the link is a mouse affordance and this
+surface is a keyboard one. Installing NEVER happens on its own: the check prints the new
+version and its notes with a link, and only that link installs. The swap
+itself is defensive because a failed one leaves a player with no UI at all -
+verify the download BEFORE touching the installed package (zip magic `PK`,
+plausible size), then uninstall and install; defer `installPackage` by one tick
+so Mudlet's installer is not re-entered from inside its own event; and arm a
+watchdog that prints a manual-install link if the swap has not completed by the
+time it fires.
 
 ## Style
 

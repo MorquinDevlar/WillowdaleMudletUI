@@ -236,6 +236,11 @@ function mdwui.buildUI()
   -- Guarded like every cross-module call at build time; one line, once per
   -- session (announceCommands remembers).
   if mdwui.announceCommands then mdwui.announceCommands() end
+  -- The session's only automatic update check (MDWUI_Update remembers it
+  -- ran, so the rebuilds MDW triggers do not re-check). Nothing is printed
+  -- unless a newer release exists, and nothing is downloaded but the
+  -- changelog until the player says so.
+  mdwui.checkForUpdateOnce()
 
   -- Top chrome bar: session/identity/version strip. Unguarded - the version
   -- gate at the top of buildUI guarantees the MDW 0.4 createBar API. loginAt
@@ -350,6 +355,14 @@ local handlers = {
   end,
 
   ["sysUninstallPackage"] = function(event, package) mdwui.onUninstall(event, package) end,
+
+  -- Self-update (MDWUI_Update). Mudlet raises the download events for EVERY
+  -- download in the profile - the mapper's, MDW's - so those handlers match
+  -- on the exact path we asked for; sysInstallPackage closes the swap and
+  -- is what tells the watchdog to stay quiet.
+  ["sysDownloadDone"] = function(event, path) mdwui.onDownloadDone(event, path) end,
+  ["sysDownloadError"] = function(event, err, path) mdwui.onDownloadError(event, err, path) end,
+  ["sysInstallPackage"] = function(event, package) mdwui.onInstallPackage(event, package) end,
 }
 
 for event, fn in pairs(handlers) do

@@ -11,3 +11,11 @@ build/
 *~
 .vscode/
 .idea/
+
+# Local working notes: design plans and cross-repo handoffs that are not part
+# of the package. Listed by name so a new source file can never be ignored by
+# accident - tools/release.sh refuses to cut a release from an unclean tree,
+# and an untracked planning doc must not be what stops it.
+UI_Command_Plan.md
+GMCP_Journal_Request.md
+MDW_Bootstrap_Handoff.md

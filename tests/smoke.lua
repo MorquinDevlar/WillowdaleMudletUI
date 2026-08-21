@@ -12,8 +12,8 @@ local MDW_ORDER = { "MDW_Config", "MDW_Helpers", "MDW_Init", "MDW_WidgetCore",
   "MDW_DockLayout", "MDW_Widget", "MDW_TabbedWidget", "MDW_Stack", "MDW_Menus",
   "MDW_Examples" }
 local UI_ORDER = { "MDWUI_Config", "MDWUI_Core", "MDWUI_Panels", "MDWUI_Combat",
-  "MDWUI_Comm", "MDWUI_Quests", "MDWUI_Journal", "MDWUI_Keys", "MDWUI_Commands",
-  "MDWUI_Init" }
+  "MDWUI_Comm", "MDWUI_Quests", "MDWUI_Journal", "MDWUI_Keys", "MDWUI_Update",
+  "MDWUI_Commands", "MDWUI_Init" }
 
 os.remove(H.homeDir .. "/mdw_layout.lua")
 
@@ -1353,7 +1353,7 @@ check(mdwui.state.journalFilters.zone == "current", "ui journal zone sets the zo
 uiRun("journal zone all")
 uiRun("journal back")
 
--- Scroll and read: the screen-reader half. Scrolling is Mudlet 4.17+, and
+-- Scroll and read: the no-mouse half. Scrolling is Mudlet 4.17+, and
 -- reading prints the widget's text where a reader can actually reach it.
 uiRun("scroll comm up 5")
 local commWidget = mdw.widgets["Comm"]
@@ -1441,6 +1441,238 @@ mdwui.buildUI()
 H.flushTimers()
 check(table.concat(H.main._echoed):find("Type ui for", 1, true) == nil,
   "the one-time hint does not repeat on later builds")
+
+-- 10c. The self-updater (MDWUI_Update.lua). The feed is the package's OWN
+-- CHANGELOG.md read from GitHub - no manifest, no URLs in the data - and the
+-- download URL is built from the release contract in MDWUI_Config. The stub
+-- records downloads instead of performing them, so every step here is driven
+-- by writing the file Mudlet would have written and raising the event Mudlet
+-- would have raised.
+-- The fixture's versions are DERIVED from the installed one, never literals:
+-- tools/release.sh bumps mdwui.version and then runs this suite, so a feed
+-- pinned to "0.9.0" would quietly stop being newer than the package the day a
+-- release passed it, and every check below would fail on the release that did
+-- it. Majors above the installed one can never collide.
+local function aheadBy(steps)
+  return ((tonumber(mdwui.version:match("^(%d+)")) or 0) + steps) .. ".0.0"
+end
+local V_LATEST, V_NEXT, V_INSTALLED = aheadBy(2), aheadBy(1), mdwui.version
+local FEED = table.concat({
+  "# Changelog",
+  "",
+  "## Unreleased",
+  "### Added",
+  "- Work that is in no release yet",
+  "",
+  "## " .. V_LATEST .. " - 2026-09-01",
+  "### Added",
+  "- A **big** new thing with `code` in it",
+  "### Fixed",
+  "- A bug",
+  "",
+  "## " .. V_NEXT .. " - 2026-08-22",
+  "### Added",
+  "- Something else",
+  "",
+  "## " .. V_INSTALLED .. " - 2026-08-01",
+  "### Added",
+  "- The first release",
+  "",
+}, "\n")
+
+local releases = mdwui.parseChangelog(FEED)
+check(#releases == 3 and releases[1].version == V_LATEST and releases[1].date == "2026-09-01"
+  and releases[3].version == V_INSTALLED, "the changelog parser reads releases newest-first, with dates")
+-- The Unreleased section is work that is in NO release: offering it as one
+-- would point the installer at a tag that does not exist.
+local sawUnreleased, allNotes = false, ""
+for _, release in ipairs(releases) do
+  if not release.version:find("^%d") then sawUnreleased = true end
+  for _, note in ipairs(release.notes) do allNotes = allNotes .. note.text .. "\n" end
+end
+check(not sawUnreleased, "## Unreleased is never read as a release (the heading's digit class)")
+check(allNotes:find("in no release yet", 1, true) == nil,
+  "and its own notes are not swept into the release below it")
+check(releases[1].notes[1].kind == "head" and releases[1].notes[1].text == "Added"
+  and releases[1].notes[2].kind == "bullet"
+  and releases[1].notes[2].text == "A big new thing with code in it",
+  "sub-headings and bullets are labelled, and inline markdown is stripped from the text")
+check(#mdwui.newerReleases(releases, V_LATEST) == 0, "nothing in the feed outranks the newest release")
+check(#mdwui.newerReleases(releases, V_INSTALLED) == 2,
+  "two releases are newer than the installed one (the same comparator, asked twice)")
+
+-- One check per SESSION, not per build: buildUI has run many times by now.
+check(#H.downloads == 1 and H.downloads[1].url == mdwui.changelogUrl,
+  "the automatic check asked for the changelog once, at the session's first build")
+local feedPath = H.downloads[1].path
+local function writeFile(path, text)
+  local fh = assert(io.open(path, "wb"))
+  fh:write(text)
+  fh:close()
+end
+local function fileText(path)
+  local fh = io.open(path, "rb")
+  if not fh then return nil end
+  local text = fh:read("*a")
+  fh:close()
+  return text
+end
+--- Answer the fetch in flight with `text`, and hand back what it printed.
+local function feed(text)
+  writeFile(feedPath, text)
+  H.main._echoed, H.main._links = {}, {}
+  raiseEvent("sysDownloadDone", feedPath)
+  return table.concat(H.main._echoed)
+end
+
+local offer = feed(FEED)
+check(offer:find(mdwui.packageName, 1, true) ~= nil and offer:find(V_INSTALLED, 1, true) ~= nil
+  and offer:find("->", 1, true) ~= nil and offer:find(V_LATEST, 1, true) ~= nil,
+  "the offer names the package, the installed version and the one available")
+check(offer:find("2026-09-01", 1, true) ~= nil, "with the release date")
+check(offer:find("A big new thing", 1, true) ~= nil and offer:find("Something else", 1, true) ~= nil,
+  "and the notes of EVERY newer release, not just the newest")
+check(offer:find("**", 1, true) == nil and offer:find("`", 1, true) == nil,
+  "no raw markdown reaches the console")
+-- Remote text: a bullet reading "<b>" must print, not paint.
+local injected = feed(FEED:gsub("A bug", "<b>bold<r> and <green>green"))
+-- "green>green" is the changelog's own "<green>green" with the bracket gone;
+-- the tag the OFFER paints with is ours, further up the same string.
+check(injected:find("bold", 1, true) ~= nil and injected:find("<b>", 1, true) == nil
+  and injected:find("<r>", 1, true) == nil and injected:find("green>green", 1, true) ~= nil,
+  "colour markup in the changelog is stripped, not obeyed")
+local installLink = uiLink("[Install update now]")
+check(installLink ~= nil, "the offer ends in a clickable install line")
+
+-- Silence is the automatic check's default: only `ui update` answers when
+-- there is nothing to install.
+local SAME_FEED = "# Changelog\n\n## Unreleased\n### Fixed\n- pending\n\n## " .. mdwui.version
+  .. " - 2026-08-01\n### Added\n- The first release\n"
+mdwui.checkForUpdate(false)
+check(feed(SAME_FEED) == "", "an automatic check with nothing to offer prints nothing at all")
+check(uiRun("update"):find("Checking for a newer", 1, true) ~= nil,
+  "ui update says it is asking")
+check(uiRun("update"):find("already running", 1, true) ~= nil,
+  "a second check while one is in flight is refused, not queued")
+check(feed(SAME_FEED):find("You are on the latest version (" .. mdwui.version .. ")", 1, true) ~= nil,
+  "and ui update answers when the installed version is the latest")
+
+-- Back to an update pending, then take it. The asset URL is CONVENTION -
+-- tag v<version>, asset named after the package - so a feed that lies about
+-- a URL has no URL to lie with.
+feed(FEED)
+uiLink("[Install update now]").cb()
+local assetUrl = H.downloads[#H.downloads].url
+check(assetUrl == "https://github.com/" .. mdwui.repoSlug
+  .. "/releases/download/v" .. V_LATEST .. "/" .. mdwui.packageName .. ".mpackage",
+  "the install link downloads the release asset built from the tag/name contract")
+
+-- A GitHub error page is not a package: verification runs BEFORE anything is
+-- uninstalled, because the running UI is the only copy the player has.
+local uninstallsBefore = #H.uninstalled
+local badPath = H.downloads[#H.downloads].path
+writeFile(badPath, "<!DOCTYPE html>" .. string.rep("x", 30000))
+H.main._echoed, H.main._links = {}, {}
+raiseEvent("sysDownloadDone", badPath)
+local rejected = table.concat(H.main._echoed)
+check(rejected:find("not a Mudlet package", 1, true) ~= nil
+  and rejected:find("Nothing was changed", 1, true) ~= nil,
+  "a download that is not a zip is refused by its first two bytes")
+check(#H.uninstalled == uninstallsBefore, "and NOTHING is uninstalled on a bad download")
+check(io.exists(badPath) == false, "the bad file is removed")
+mdwui.installUpdate()
+writeFile(H.downloads[#H.downloads].path, "PK\003\004tiny")
+H.main._echoed = {}
+raiseEvent("sysDownloadDone", H.downloads[#H.downloads].path)
+check(table.concat(H.main._echoed):find("only %d+ bytes") ~= nil
+  and #H.uninstalled == uninstallsBefore, "a truncated download is refused by size, again with no swap")
+
+-- Installed as a MODULE: Mudlet reloads a module from its own file, so the
+-- verified download becomes that file - copied only after verification, or a
+-- bad fetch would have destroyed the working copy on the way in.
+local PACKAGE_BYTES = "PK\003\004" .. string.rep("m", 20100)
+local modulePath = H.homeDir .. "/mdwui-module-copy.mpackage"
+writeFile(modulePath, "the previous module")
+H.modulePaths[mdwui.packageName] = modulePath
+mdwui.installUpdate()
+local modDownload = H.downloads[#H.downloads].path
+writeFile(modDownload, PACKAGE_BYTES)
+raiseEvent("sysDownloadDone", modDownload)
+check(H.reloaded[#H.reloaded] == mdwui.packageName and #H.uninstalled == uninstallsBefore,
+  "a module install reloads the module instead of swapping the package")
+check(fileText(modulePath) == PACKAGE_BYTES, "the verified download replaced the module file")
+os.remove(modulePath)
+H.modulePaths[mdwui.packageName] = nil
+
+-- The offer's link is a mouse affordance, and this surface is a keyboard one:
+-- a player who would rather not reach for the mouse needs a typed form, and
+-- bare `ui update` only
+-- re-checks. So the install has a typed form, prefix-matched like the rest.
+local beforeTyped = #H.downloads
+uiRun("update i")
+check(#H.downloads == beforeTyped + 1 and H.downloads[#H.downloads].url == assetUrl,
+  "ui update install starts the same download the offer's link does")
+check(uiRun("update sideways"):find("Say install", 1, true) ~= nil,
+  "and any other word is answered, never sent to the server")
+-- Refused by size, which clears the in-flight guard without swapping anything.
+writeFile(H.downloads[#H.downloads].path, "PK\003\004tiny")
+raiseEvent("sysDownloadDone", H.downloads[#H.downloads].path)
+
+-- The package swap, in order: verified file on disk, THEN uninstall, THEN a
+-- deferred install (Mudlet's installer must not be re-entered from its own
+-- event). Our own uninstall cleanup runs inside uninstallPackage, which is
+-- why both timers are created after it.
+mdwui.installUpdate()
+local swapPath = H.downloads[#H.downloads].path
+writeFile(swapPath, PACKAGE_BYTES)
+H.main._echoed, H.main._links = {}, {}
+raiseEvent("sysDownloadDone", swapPath)
+check(H.uninstalled[#H.uninstalled] == mdwui.packageName and #H.uninstalled == uninstallsBefore + 1,
+  "a verified download uninstalls the running package")
+check(#H.installed == 0, "and the install waits one tick rather than running inside the event")
+check(mdw.widgets["Journal"] == nil, "our uninstall cleanup ran with it (widgets gone)")
+H.flushTimers()
+check(H.installed[#H.installed] == swapPath, "the deferred tick installs the verified file")
+-- Nothing came back from that install in this run, so the watchdog speaks:
+-- a failed swap must never strand a player with no UI and no file.
+local watch = table.concat(H.main._echoed)
+check(watch:find("did not finish installing", 1, true) ~= nil
+  and watch:find(swapPath, 1, true) ~= nil,
+  "the watchdog hands the saved package back when no install event arrives")
+check(uiLink("[Install it now]") ~= nil, "with a one-click install of that file")
+
+-- Now the other half: Mudlet runs the new package's scripts, then raises
+-- sysInstallPackage. mdwui.state survives in the Lua state, which is how the
+-- watchdog from the old script run would have learned to stay quiet.
+local downloadsBeforeSwap = #H.downloads
+for _, name in ipairs(UI_ORDER) do
+  assert(pcall(dofile, "src/scripts/" .. name .. ".lua"), "failed reloading " .. name)
+end
+H.flushTimers()
+raiseEvent("sysInstallPackage", mdwui.packageName)
+check(mdwui.state.updateInstalled == true, "the reinstalled package reports back on sysInstallPackage")
+check(io.exists(swapPath) == false, "and the temp package file is cleaned up after it lands")
+check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
+  "the swapped-in package rebuilt the whole UI from its seeds")
+check(#H.downloads == downloadsBeforeSwap, "the rebuild after the swap does not re-check the feed")
+check(uiRun("update install"):find("No update is pending", 1, true) ~= nil,
+  "with the offer spent, a typed install asks for a check first instead of re-downloading it")
+
+-- A changelog with a release's worth of notes is capped, with a pointer to
+-- the rest: the offer must not scroll the session away.
+local big = { "## " .. aheadBy(3) .. " - 2026-12-31", "### Added" }
+for i = 1, 60 do big[#big + 1] = "- Change number " .. i end
+mdwui.checkForUpdate(false)
+local capped = feed(table.concat(big, "\n"))
+local printedBullets = select(2, capped:gsub("Change number", ""))
+check(printedBullets <= 40 and capped:find("more lines - see the changelog", 1, true) ~= nil,
+  "a long changelog is capped at 40 lines and says how many it held back")
+
+-- The verb and its overview row, the rule for every player-facing toggle.
+check(uiRun("help update"):find("ui update", 1, true) ~= nil, "ui help update explains the verb")
+local ovUpdate = (uiRun(""):gsub("<[%w_]+>", ""))
+check(ovUpdate:find("update%s+" .. (mdwui.version:gsub("%.", "%%."))) ~= nil,
+  "the overview carries a ui update row whose value is the installed version")
 
 -- 11. JSON null tolerance: OLDER server builds marshaled nil Go slices/maps
 -- as null, which Mudlet's decoder turns into a truthy userdata sentinel -

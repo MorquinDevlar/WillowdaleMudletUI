@@ -83,6 +83,8 @@ ui debug [gmcp [<path>]]              UI diagnostics, or dump the GMCP data
                                       (ui debug gmcp Char.Vitals)
 ui reset [all] confirm                back to the default layout
 ui rebuild                            rebuild the UI in place
+ui update [install]                   check GitHub for a newer UI, or take
+                                      the offer without the mouse
 ```
 
 Revealing a widget by keyboard puts it **back where it was** - its old group,
@@ -123,9 +125,6 @@ this package's registration whenever it sets up.
 
 ## Design notes
 
-- The GMCP data contract is documented in the WillowdaleMUD repo:
-  `documentation/Mudlet_Widget_GMCP_Guide.md`. Field names, cadence, and the
-  edge cases handled here all come from that guide.
 - Panels render as pure functions of Mudlet's `gmcp` table: every update
   clears and repaints from the latest payloads, and widget resize re-renders
   through the same functions (which is what keeps clickable links alive -
