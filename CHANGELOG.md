@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.8 - 2026-08-22
+
 ### Fixed
 - Updating installs again. The new package was being handed to Mudlet before
   the old one had finished being removed, which Mudlet accepted and then
