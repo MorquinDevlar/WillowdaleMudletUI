@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.10 - 2026-08-22
+
 ### Added
 - A finished update now says so, and names the version you are on, instead of
   going quiet and leaving you to wonder whether it is still working.
