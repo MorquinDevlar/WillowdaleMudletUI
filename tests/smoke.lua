@@ -226,7 +226,9 @@ gmcp = {
           { id = "!10100:1", name = "Rusty Sword", type = "weapon", sub_type = "slashing",
             quantity = 1, details = {}, command = "wield", uses = 0 },
           { id = "!30007:1", name = "Pork Pie", type = "food", sub_type = "edible",
-            quantity = 1, details = {}, command = "eat", uses = 0 } },
+            quantity = 1, details = {}, command = "eat", uses = 0 },
+          { id = "!30004:1", name = "Elderflower Cordial", type = "drink", sub_type = "drinkable",
+            quantity = 1, details = {}, command = "drink", uses = 0 } },
         Summary = { count = 4, max = 20 },
       },
       Keyring = {
@@ -471,7 +473,7 @@ local inv = mdw.widgets["Inventory"]
 local invText = joined(inv)
 check(invText:find(" 1 - <", 1, true) and invText:find("red potion", 1, true)
   and invText:find("(3)", 1, true), "inventory row is numbered with (quantity)")
-check(invText:find("3 out of 20 items.", 1, true) and invText:find("─"),
+check(invText:find("4 out of 20 items.", 1, true) and invText:find("─"),
   "inventory footer counts stacks over a rule")
 check(findLink(inv.content, "red potion").hint
   == "red potion\nConsumable (Potion)\nUse: Quaff",
@@ -484,6 +486,9 @@ check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Wield") ~= nil,
 findLink(inv.content, "Pork Pie").cb()
 check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Eat") ~= nil,
   "and food leads with Eat, from the same field")
+findLink(inv.content, "Elderflower Cordial").cb()
+check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Drink") ~= nil,
+  "and a drink leads with Drink - nothing here special-cases a type")
 -- Menu rows mirror makeInventoryClickHandler: own verb first, then Look, Drop
 findLink(inv.content, "red potion").cb()
 check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Quaff") ~= nil,
