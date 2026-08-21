@@ -277,9 +277,12 @@ mdwui.state = mdwui.state or {
   -- all-clear the watchdog reads, which only works because this table
   -- survives the package swap in the Lua state.
   -- MDW bootstrap keys (MDWUI_Update, runtime): mdwFile (the download in
-  -- flight, matched against sysDownloadDone's path) and mdwFetchedThisSession
-  -- - one attempt per session, so a dead network cannot turn into a retry
-  -- loop across profile loads and installs.
+  -- flight, matched against sysDownloadDone's path) and mdwFetchedFor - the
+  -- minMdwVersion the last bootstrap attempt was made for, so a dead network
+  -- cannot turn into a retry loop while an update that RAISES the pin still
+  -- gets an attempt of its own. It is not a boolean for that reason: this
+  -- table survives a package swap, and a boolean made a session that had ever
+  -- fetched MDW unable to ever fetch it again.
 }
 
 ---------------------------------------------------------------------------

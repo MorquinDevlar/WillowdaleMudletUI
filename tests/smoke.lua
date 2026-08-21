@@ -1985,7 +1985,7 @@ check(table.concat(H.main._echoed):find("as a module", 1, true) ~= nil
 H.modulePaths["MDW"] = nil
 -- That attempt spent the session's one try; the checks below are about the
 -- ordinary package case.
-mdwui.state.mdwFetchedThisSession = nil
+mdwui.state.mdwFetchedFor = nil
 
 -- Too old. The gate is what a player with no network is left holding, so it
 -- keeps the manual instruction even while the download is under way.
@@ -2019,7 +2019,7 @@ check(#H.uninstalled == bootUninstalls, "and the MDW that is running is NOT unin
 check(io.exists(mdwPath) == false, "the bad file is removed")
 
 -- The other failure mode: nothing arrives at all.
-mdwui.state.mdwFetchedThisSession = nil
+mdwui.state.mdwFetchedFor = nil
 mdwui.ensureMdw()
 H.main._echoed = {}
 raiseEvent("sysDownloadError", "host not found", H.downloads[#H.downloads].path)
@@ -2033,7 +2033,7 @@ check(mdwui.state.updateBusyAt == nil and mdwui.state.mdwFile == nil,
 -- profile - which is also the second trigger, since our own install is the
 -- first moment the package can find that out.
 H.packages = {}
-mdwui.state.mdwFetchedThisSession = nil
+mdwui.state.mdwFetchedFor = nil
 local bootInstalls = #H.downloads
 raiseEvent("sysInstallPackage", mdwui.packageName)
 check(#H.downloads == bootInstalls,
@@ -2053,7 +2053,7 @@ check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
 -- An MDW that is merely too old: uninstall FIRST (Mudlet refuses to install
 -- over a name it holds), and only once the replacement is proven on disk.
 H.packages = { "MDW" }
-mdwui.state.mdwFetchedThisSession = nil
+mdwui.state.mdwFetchedFor = nil
 mdwui.ensureMdw()
 mdwPath = H.downloads[#H.downloads].path
 writeFile(mdwPath, PACKAGE_BYTES)
@@ -2079,7 +2079,7 @@ check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
 local mdwVersionForRace = mdw.version
 mdw.version = "0.4.0" -- too old, so the bootstrap actually fetches
 H.packages = { "MDW" }
-mdwui.state.mdwFetchedThisSession = nil
+mdwui.state.mdwFetchedFor = nil
 mdwui.state.mdwFile = nil
 mdwui.state.updateBusyAt = nil
 local downloadsBeforeHeld = #H.downloads
@@ -2095,6 +2095,32 @@ H.flushTimers()
 check(H.installed[#H.installed] == heldPath and #H.installed == heldInstalls + 1,
   "and then installs exactly once, on the timer")
 mdw.version = mdwVersionForRace
+
+-- The guard is per REQUIREMENT, not per session. It used to be a plain "have
+-- we fetched this session" boolean, and mdwui.state survives a package swap by
+-- design - so a client that had bootstrapped MDW once could never bootstrap it
+-- again. A live client hit exactly that: an update raised minMdwVersion, the
+-- build gate refused, and the bootstrap returned in silence because it had
+-- fetched the OLD minimum hours earlier. The UI was left unable to complete
+-- its own update.
+local pinForGuard, versionForGuard = mdwui.minMdwVersion, mdw.version
+-- The in-flight download from the step above is restored afterwards: the swap
+-- it belongs to is still being followed further down.
+local mdwFileInFlight, busyInFlight = mdwui.state.mdwFile, mdwui.state.updateBusyAt
+mdw.version = "0.4.0" -- below any pin, so the requirement is genuinely unmet
+mdwui.state.mdwFetchedFor = pinForGuard -- an attempt was already made for THIS pin
+mdwui.state.updateBusyAt, mdwui.state.mdwFile = nil, nil
+local guardDownloads = #H.downloads
+mdwui.ensureMdw()
+check(#H.downloads == guardDownloads,
+  "an attempt already made for this requirement is not repeated")
+mdwui.minMdwVersion = "0.5.9" -- as a package swap raising the pin would
+mdwui.ensureMdw()
+check(#H.downloads == guardDownloads + 1,
+  "but a raised minimum gets an attempt of its own, in the same session")
+mdwui.minMdwVersion, mdw.version = pinForGuard, versionForGuard
+mdwui.state.mdwFetchedFor = nil
+mdwui.state.mdwFile, mdwui.state.updateBusyAt = mdwFileInFlight, busyInFlight
 
 -- Mudlet unpacks the new MDW, runs its scripts, then raises sysInstallPackage.
 -- Nothing in this package activates anything: MDW's install runs setup ->

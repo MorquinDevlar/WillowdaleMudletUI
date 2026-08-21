@@ -507,10 +507,19 @@ end
 -- is what makes this safe to call from any trigger, as often as one fires.
 function mdwui.ensureMdw()
   if mdwui.mdwSatisfied() then return false end
-  -- One attempt per session: the triggers (profile load, our own install)
-  -- fire more than once, and a repeat would only reprint a failure the player
-  -- has already read.
-  if mdwui.state.mdwFetchedThisSession then return false end
+  -- One attempt per session PER REQUIREMENT. This used to be a plain "have we
+  -- fetched this session" boolean, and mdwui.state survives a package swap by
+  -- design - so a session that had ever bootstrapped MDW could never bootstrap
+  -- it again, however the requirement changed underneath it. A live client hit
+  -- exactly that: an update raised minMdwVersion to 0.5.1, the build gate
+  -- refused, and the bootstrap returned here in silence because it had fetched
+  -- 0.5.0 hours earlier in the same session. The UI was left uninstallable
+  -- from its own update.
+  --
+  -- Keyed on the version being asked for, a NEW requirement gets a fresh
+  -- attempt, while a dead network still cannot turn one failure into a retry
+  -- loop: the pin does not change until the player takes another update.
+  if mdwui.state.mdwFetchedFor == mdwui.minMdwVersion then return false end
   -- The updater and the bootstrap share one downloader guard so neither can
   -- land on the other's file. The overlap is nearly impossible in practice -
   -- the update check starts from buildUI, which the version gate turns back
@@ -519,7 +528,7 @@ function mdwui.ensureMdw()
   -- Set before the downloader check, not after it: a Mudlet with no
   -- downloadFile will not grow one mid-session, so that line is worth saying
   -- exactly as often as the fetch itself - once.
-  mdwui.state.mdwFetchedThisSession = true
+  mdwui.state.mdwFetchedFor = mdwui.minMdwVersion
   -- MDW installed as a MODULE is not ours to swap. getPackages() does not
   -- list modules, so the check below would read "absent" and installPackage
   -- would leave a package named MDW beside the module - two copies of the

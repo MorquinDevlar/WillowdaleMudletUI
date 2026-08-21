@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- An update that needs a newer MDW now fetches it. If MDW had already been
+  installed for you earlier in the same Mudlet session, the UI would decline to
+  fetch a newer one - silently - and sit there refusing to build. Reloading the
+  profile was the only way out.
+
 ## 0.1.11 - 2026-08-22
 
 ### Changed
