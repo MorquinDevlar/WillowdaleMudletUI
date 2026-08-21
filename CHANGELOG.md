@@ -27,6 +27,9 @@ out of the version number alone - so neither may change.
   was still going. The wait is now longer than the message that reports it,
   and when an update really does fail the message says what went wrong rather
   than only that it did.
+- Removing the UI now removes the whole interface - the MDW framework this
+  package installed, the saved layout and the font it applied - instead of
+  leaving the framework behind.
 
 ## 0.1.5 - 2026-08-21
 

@@ -504,7 +504,21 @@ function mdwui.onClientGui()
     -- Deferred a tick for the same reason the update swap defers its install:
     -- this handler belongs to the package being torn down, and uninstallPackage
     -- deletes the very handler we are standing in. Let the event finish first.
-    local id = tempTimer(0, function() uninstallPackage(mdwui.packageName) end)
+    local id = tempTimer(0, function()
+      -- MDW's own full uninstall, not just ours. It removes every registered
+      -- game package (we are in mdw.gamePackages), restores the main console
+      -- font and background, deletes the saved layout, and then removes MDW.
+      -- Removing only our own package would leave behind the framework THIS
+      -- PACKAGE INSTALLED (ensureMdw), its layout file and the font it applied
+      -- - "remove the UI" means the interface, not the half of it that happens
+      -- to carry our name. The ordinary sysUninstallPackage path still leaves
+      -- MDW running, because that one is not a request to remove the UI.
+      if mdw and mdw.uninstall then
+        mdw.uninstall()
+      else
+        uninstallPackage(mdwui.packageName)
+      end
+    end)
     if id then mdwui.addTimer(id) end
   elseif command == "update" then
     -- Manual, not the silent session check: the game asked on the player's

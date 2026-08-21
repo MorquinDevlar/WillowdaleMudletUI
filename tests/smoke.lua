@@ -1742,6 +1742,22 @@ check(feed(feedJson({ { mdwui.version, "2026-08-01", { "The first release" } } }
   :find("You are on the latest version", 1, true) ~= nil,
   "and answers even when there is nothing to install")
 
+-- "Remove the UI" means the interface, not the half carrying our name: MDW's
+-- full uninstall takes every registered game package, the saved layout, the
+-- font it applied, and MDW itself. Leaving behind the framework THIS package
+-- installed is not a removal, it is a mess. Spied rather than run, because
+-- actually tearing MDW down here would end the suite.
+local realUninstall = mdw.uninstall
+local fullUninstallCalled = false
+mdw.uninstall = function() fullUninstallCalled = true end
+gmcp.Client.GUI = { gomudui = "remove" }
+raiseEvent("gmcp.Client.GUI")
+check(not fullUninstallCalled,
+  "remove does not uninstall from inside the event handler it is standing in")
+H.flushTimers()
+check(fullUninstallCalled,
+  "a deferred tick runs MDW's full uninstall - the framework goes with the UI")
+mdw.uninstall = realUninstall
 gmcp.Client.GUI = nil
 
 local ovUpdate = (uiRun(""):gsub("<[%w_]+>", ""))
@@ -2034,19 +2050,11 @@ check(io.exists(mdwPath) == false, "and the downloaded MDW package is cleaned up
 -- The event carries the mfile package name - packageName must match it.
 -- An open context menu holds closures into this package, so it must go too.
 --
--- Driven by the GAME's own removal command rather than a synthetic event, so
--- this covers both halves at once: Client.GUI { gomudui = "remove" } reaching
--- uninstallPackage, and the cleanup that call sets off.
+-- This is the ORDINARY path - a player removing the package from Mudlet's own
+-- package manager. Its invariant is that MDW keeps running; the game's remove
+-- command is a different thing and is covered separately above.
 mdw.showContextMenu("stale actions", { { label = "Noop", onClick = function() end } }, 100, 100)
-local uninstallsBeforeRemove = #H.uninstalled
-gmcp.Client = { GUI = { gomudui = "remove" } }
-raiseEvent("gmcp.Client.GUI")
-check(#H.uninstalled == uninstallsBeforeRemove,
-  "remove does not uninstall from inside the event handler it is standing in")
-H.flushTimers()
-check(H.uninstalled[#H.uninstalled] == mdwui.packageName
-  and #H.uninstalled == uninstallsBeforeRemove + 1,
-  "a deferred tick then uninstalls this package, and only this one")
+raiseEvent("sysUninstallPackage", mdwui.packageName)
 check(mdw.menus.context == false and H.labels["MDW_ContextMenuBg"] == nil,
   "open context menu closed by our uninstall")
 check(mdw.widgets["Combat"] == nil and mdw.widgets["Comm"] == nil, "our widgets destroyed on uninstall")
