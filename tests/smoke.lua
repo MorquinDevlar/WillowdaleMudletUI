@@ -110,6 +110,15 @@ check(mdwui.versionAtLeast("0.3.9", "0.4.0") == false, "0.3.9 falls short of 0.4
 check(mdwui.versionAtLeast(nil, "0.4.0") == false, "a missing mdw.version is too old")
 check(mdwui.versionAtLeast("0.4", "0.4.0") == true, "missing trailing components count as 0")
 check(mdwui.mdwSatisfied(), "the sibling MDW checkout meets our minimum")
+-- The pin is TWO constants and nothing at runtime notices them disagreeing:
+-- the build gate reads minMdwVersion, the bootstrap downloads mdwUrl. Point
+-- them at different releases and ensureMdw fetches an MDW that still fails
+-- the gate - the player gets no UI at all, and one "needs MDW" line per
+-- session, with the download working perfectly every time.
+local pinnedMdw = mdwui.mdwUrl:match("/releases/download/v([^/]+)/")
+check(pinnedMdw == mdwui.minMdwVersion, string.format(
+  "mdwUrl matches minMdwVersion (offers %s, requires %s)",
+  tostring(pinnedMdw), mdwui.minMdwVersion))
 -- The gate must refuse BEFORE any side effect, so a build under an old MDW
 -- leaves the live session exactly as it was.
 local realMdwVersion = mdw.version

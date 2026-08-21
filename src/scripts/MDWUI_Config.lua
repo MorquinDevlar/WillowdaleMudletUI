@@ -38,7 +38,7 @@ mdwui.version = "0.1.0"
 -- for it: a player sitting on 0.4.1 satisfies a 0.4.0 minimum, so ensureMdw
 -- would leave them there and applyMainFont would never take effect. The
 -- typeface verb itself stays guarded through capability() regardless.
-mdwui.minMdwVersion = "0.5.1"
+mdwui.minMdwVersion = "0.5.0"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, MDWUI_Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
@@ -52,7 +52,7 @@ mdwui.minMdwVersion = "0.5.1"
 -- (MDW.mpackage) as a contract, the same shape as our own releaseUrlFormat
 -- below. Verify a tag exists before pinning it: an unpublished version here
 -- makes every bootstrap download a GitHub error page instead of a package.
-mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.5.1/MDW.mpackage"
+mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.5.0/MDW.mpackage"
 
 -- Where the self-updater (MDWUI_Update.lua) looks. The feed is the package's
 -- OWN CHANGELOG.md, read raw from the default branch; it carries no URLs, so
