@@ -219,8 +219,14 @@ gmcp = {
       Worn = { weapon = { id = "!20:aa", name = "iron sword", type = "weapon", sub_type = "sword",
         details = { "enchanted" }, command = "wield" } },
       Backpack = {
+        -- Shapes taken from a live payload: an item's own command is its verb,
+        -- and it is what decides which action a menu offers.
         Items = { { id = "!21:bb", name = "red potion", type = "consumable", sub_type = "potion",
-          quantity = 3, details = {}, command = "quaff" } },
+          quantity = 3, details = {}, command = "quaff" },
+          { id = "!10100:1", name = "Rusty Sword", type = "weapon", sub_type = "slashing",
+            quantity = 1, details = {}, command = "wield", uses = 0 },
+          { id = "!30007:1", name = "Pork Pie", type = "food", sub_type = "edible",
+            quantity = 1, details = {}, command = "eat", uses = 0 } },
         Summary = { count = 4, max = 20 },
       },
       Keyring = {
@@ -465,11 +471,19 @@ local inv = mdw.widgets["Inventory"]
 local invText = joined(inv)
 check(invText:find(" 1 - <", 1, true) and invText:find("red potion", 1, true)
   and invText:find("(3)", 1, true), "inventory row is numbered with (quantity)")
-check(invText:find("1 out of 20 items.", 1, true) and invText:find("─"),
+check(invText:find("3 out of 20 items.", 1, true) and invText:find("─"),
   "inventory footer counts stacks over a rule")
 check(findLink(inv.content, "red potion").hint
   == "red potion\nConsumable (Potion)\nUse: Quaff",
   "inventory row hint carries the web tooltip box")
+-- Each item's OWN command is its action, whatever the item is - the same rule
+-- that decides whether the forage bag offers Eat.
+findLink(inv.content, "Rusty Sword").cb()
+check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Wield") ~= nil,
+  "a weapon's menu leads with its own verb, Wield")
+findLink(inv.content, "Pork Pie").cb()
+check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Eat") ~= nil,
+  "and food leads with Eat, from the same field")
 -- Menu rows mirror makeInventoryClickHandler: own verb first, then Look, Drop
 findLink(inv.content, "red potion").cb()
 check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Quaff") ~= nil,
