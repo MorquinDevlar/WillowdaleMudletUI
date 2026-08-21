@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.7 - 2026-08-22
+
 ### Fixed
 - The Equipment, Inventory and Forage group finally opens at a useful size. It
   had been stuck at the framework's default height on every profile and every

@@ -24,7 +24,7 @@ mdwui.packageName = "WillowdaleMudletUI"
 -- mapper.version): a plain string matching the mfile "version", assigned at
 -- script-load time so any other script can read it at runtime with a guarded
 -- lookup. Bump together with mfile - the smoke suite enforces the match.
-mdwui.version = "0.1.6"
+mdwui.version = "0.1.7"
 -- Hard requirement, not a preference: this package is built on the MDW 0.4
 -- APIs (createBar, setPromptGauges/setPromptBarMenu, setWidgetRows/
 -- setWidgetMenu, showContextMenu, findWidget and the scripted-control
