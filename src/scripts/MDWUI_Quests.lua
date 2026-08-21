@@ -79,7 +79,7 @@ local function chevron(co, C, stateTable, key, expandable, hint, rerender)
     return
   end
   local open = stateTable[key] and true or false
-  co:dechoLink(string.format("<%s>%s", C.charLabel, open and "∨" or ">"),
+  co:dechoLink(string.format("<%s>%s", C.charLabel, open and "▼" or "▶"),
     function()
       stateTable[key] = (not open) or nil
       rerender()

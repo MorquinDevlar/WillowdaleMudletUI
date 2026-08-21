@@ -286,7 +286,12 @@ mdw.gameConfig.uiName = "WillowdaleUI"
 -- against getAvailableFonts and falls back on its own if it is missing).
 -- The name is the font's own family string, not the file name - Mudlet
 -- matches on family. Fira Code is what the web client and the website render
--- in, so a player moving between them sees one face.
+-- in, so a player moving between them sees one face. The bundled build is the
+-- web side's own: no ligature features (its GSUB carries only ccmp and locl,
+-- so "->" stays two characters) and the full box-drawing range. It is a
+-- SUBSET though - any glyph outside it, like U+2228, gets silently drawn from
+-- another family at another width, so check a character is in the font before
+-- printing it.
 mdw.gameConfig.fontFamily = "Fira Code"
 -- The server drives the prompt bar through GMCP (Char.Vitals.prompt/prompt2
 -- arrive as real ANSI), so MDW's line-capture trigger must stay out of the way.

@@ -299,7 +299,7 @@ function mdwui.renderJournal()
     local id = entry.id
     local key = tostring(id)
     local open = mdwui.state.pjExpanded[key] and true or false
-    co:dechoLink(string.format("<%s>%s", C.charLabel, open and "∨" or ">"),
+    co:dechoLink(string.format("<%s>%s", C.charLabel, open and "▼" or "▶"),
       function()
         mdwui.state.pjExpanded[key] = (not open) or nil
         mdwui.renderJournal()
