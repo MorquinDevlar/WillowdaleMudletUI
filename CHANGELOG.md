@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.17 - 2026-08-22
+
 ### Changed
 - Needs MDW 0.6.3, which the UI fetches for you before it updates itself. That
   MDW fixes an update coming back with the prompt bar and no widgets, and
