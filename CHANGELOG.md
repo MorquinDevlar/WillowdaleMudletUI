@@ -91,8 +91,8 @@ out of the version number alone - so neither may change.
   A newer MDW than the UI needs is never touched, the download is checked
   before the MDW you are running is replaced, and if it cannot be fetched you
   are told where to get it by hand.
-- Requires MDW 0.5.0 or newer, which the UI installs for you if it is
-  missing - install order with MDW does not matter, in either direction, and the UI
-  rebuilds itself when MDW updates. MDW 0.4.0 or newer is required: with an
-  older MDW the package declines to build and prints one explanatory line
-  instead of half a UI while the version it needs is fetched.
+- Requires MDW 0.5.1 or newer, which the UI installs for you if it is
+  missing - install order with MDW does not matter, in either direction, and
+  the UI rebuilds itself when MDW updates. With an older MDW the package
+  declines to build and prints one explanatory line instead of half a UI
+  while the version it needs is fetched.
