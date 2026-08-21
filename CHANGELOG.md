@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.12 - 2026-08-22
+
 ### Fixed
 - An update that needs a newer MDW now fetches it. If MDW had already been
   installed for you earlier in the same Mudlet session, the UI would decline to
