@@ -169,6 +169,18 @@ function calcFontSize(size) return size * 0.6, size * 1.2 end
 function getFontSize() return 11 end
 function setFontSize() end
 function getAvailableFonts() return { ["Fira Code Willowdale"] = true, ["Bitstream Vera Sans Mono"] = true } end
+-- The main console's family. getFont answers with what was last applied, which
+-- is the closest a stub gets to Qt reporting the family it actually resolved.
+H.mainFont = "Bitstream Vera Sans Mono"
+function setFont(window, name)
+  -- One argument means the main console, the way Mudlet's WINDOW_NAME macro
+  -- treats a missing or nil window.
+  if name == nil then name = window end
+  if not getAvailableFonts()[name] then return nil, "font '" .. tostring(name) .. "' is not available" end
+  H.mainFont = name
+  return true
+end
+function getFont() return H.mainFont end
 function setBorderLeft() end
 function setBorderRight() end
 function setBorderTop() end

@@ -282,7 +282,9 @@ end
 local function capability(name)
   local fn = mdw and mdw[name]
   if type(fn) == "function" then return fn end
-  mdwui.say(string.format("That needs MDW 0.4 or newer (mdw.%s is missing).", name))
+  -- No version named: capabilities have arrived in several MDW releases, and
+  -- a hardcoded number here would be wrong for whichever came later.
+  mdwui.say(string.format("That needs a newer MDW than this profile has (mdw.%s is missing).", name))
   return nil
 end
 
@@ -785,9 +787,39 @@ COMMANDS = {
     end },
 
   { name = "font",
-    usage = "ui font [main|menu|header|prompt|<widget>] [<size>|+n|-n]",
-    help = "Show or set font sizes. Widget sizes are effective sizes, like the Font Size menu's.",
+    usage = "ui font [family [<name>]|main|menu|header|prompt|<widget>] [<size>|+n|-n]",
+    help = "Show or set font sizes, or the typeface with `ui font family`. Widget sizes are "
+      .. "effective sizes, like the Font Size menu's.",
     run = function(words)
+      -- The family is a separate axis from the sizes, and it is MDW 0.5+, so
+      -- it answers before getFontSizes is even asked for.
+      if words[2] and ("family"):find(words[2]:lower(), 1, true) == 1 then
+        local name = rest(words, 3)
+        if name == "" then
+          local get = capability("getFontFamily")
+          if not get then return end
+          local preferred, effective = get()
+          if effective and effective ~= preferred then
+            -- The two differ when the preferred face is not installed here.
+            mdwui.say(string.format("Font family: %s (rendering as %s - %s is not installed).",
+              plain(preferred), plain(effective), plain(preferred)))
+          else
+            mdwui.say(string.format("Font family: %s.", plain(preferred)))
+          end
+          return
+        end
+        local set = capability("setFontFamily")
+        if not set then return end
+        local ok, code = set(name)
+        if ok then
+          mdwui.say(string.format("Font family is %s.", plain(name)))
+        elseif code == "invalid" then
+          mdwui.say(string.format("No font called '%s' is installed here.", plain(name)))
+        else
+          mdwui.say(string.format("Could not set the font family (%s).", plain(code)))
+        end
+        return
+      end
       local fn = capability("getFontSizes")
       if not fn then return end
       local sizes = fn()
@@ -1422,6 +1454,16 @@ for _, key in ipairs({ "main", "menu", "header", "prompt" }) do
 end
 LOOK_ROWS[#LOOK_ROWS + 1] = { cmd = "font <widget>", link = "font",
   opts = "<size>|+n|-n   its effective size, like the Font Size menu" }
+LOOK_ROWS[#LOOK_ROWS + 1] = { cmd = "font family", link = "font family",
+  -- Short on purpose: a font family overflows the 10-wide value column and
+  -- pushes this row's Options right, so the text has to fit what is left of
+  -- 80 columns even behind a name like "Bitstream Vera Sans Mono".
+  opts = "<name>   the UI typeface",
+  value = function()
+    if not (mdw and mdw.getFontFamily) then return "-" end
+    local _, effective = mdw.getFontFamily()
+    return tostring(effective or "-")
+  end }
 
 -- The screen, shaped like the game's own `config` command: Command / Value /
 -- Options in three columns, grouped under headings, the on/off rows first.

@@ -1154,7 +1154,7 @@ local UI_COLOURS = { sky_blue = true, cyan = true, grey = true, white = true, go
   YellowGreen = true, DodgerBlue = true, OliveDrab = true }
 local PLACEHOLDERS = { widget = true, other = true, px = true, n = true, size = true, tab = true,
   id = true, category = true, page = true, value = true, command = true,
-  what = true, path = true }
+  what = true, path = true, name = true }
 local strayTag
 for tag in overview:gmatch("<([%w_]+)>") do
   if not (UI_COLOURS[tag] or PLACEHOLDERS[tag]) then strayTag = tag end
@@ -1288,6 +1288,25 @@ uiRun("font quests +2")
 check(mdw.getFontSizes().widgets["Quests"] == questFontSize + 2,
   "a relative widget font size applies to its effective size")
 check(uiRun("font"):find("main 13", 1, true) ~= nil, "bare ui font lists every size")
+
+-- The typeface arrived in MDW 0.5 (mdw.setFontFamily). This package guards
+-- every MDW call on existence instead of pinning a version, so the suite has
+-- to hold against BOTH sides of that guard - which is also what a player on
+-- either MDW gets.
+if mdw.setFontFamily then
+  local preferred = mdw.getFontFamily()
+  check(uiRun("font family"):find(preferred, 1, true) ~= nil,
+    "ui font family names the typeface in use")
+  check(uiRun("font family Bitstream Vera Sans Mono"):find("Bitstream Vera Sans Mono", 1, true) ~= nil
+    and select(2, mdw.getFontFamily()) == "Bitstream Vera Sans Mono",
+    "and sets it, a name with spaces and all")
+  check(uiRun("font family Nonesuch Mono"):find("installed", 1, true) ~= nil,
+    "a font nobody has is answered, never sent to the server")
+  uiRun("font family " .. preferred) -- leave the session as it was found
+else
+  check(uiRun("font family Whatever"):find("newer MDW", 1, true) ~= nil,
+    "under an MDW without it, the typeface verb says so rather than erroring")
+end
 uiRun("theme ruby")
 check(mdw.config.theme == "ruby", "ui theme switches theme")
 uiRun("theme next")

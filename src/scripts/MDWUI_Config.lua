@@ -301,6 +301,13 @@ mdw.gameConfig.uiName = "WillowdaleUI"
 -- file, so no system font can shadow it. Re-syncing the font from the web
 -- side means re-applying this rename.
 mdw.gameConfig.fontFamily = "Fira Code Willowdale"
+-- ...and ask MDW to put the MAIN console in it too, so the game's own text
+-- matches the widgets instead of sitting in whatever face the profile had.
+-- MDW keeps this opt-in and captures the player's original family before it
+-- applies one, restoring it on a full uninstall. Inert before MDW 0.5, which
+-- is where applyMainFont arrived - an unknown gameConfig key is merged into
+-- mdw.config and simply never read.
+mdw.gameConfig.applyMainFont = true
 -- The server drives the prompt bar through GMCP (Char.Vitals.prompt/prompt2
 -- arrive as real ANSI), so MDW's line-capture trigger must stay out of the way.
 mdw.gameConfig.usePromptTrigger = false
