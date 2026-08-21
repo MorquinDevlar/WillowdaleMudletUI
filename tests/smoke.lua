@@ -1259,8 +1259,8 @@ uiRun("numpad on")
 check(mdwui.numpadWalking() == true, "and back on again")
 
 local unknownOut = uiRun("wibble")
-check(unknownOut:find("[ui]", 1, true) ~= nil and unknownOut:find("Unknown command", 1, true) ~= nil,
-  "an unknown command is named, tagged [ui]")
+check(unknownOut:find("[ UI - ", 1, true) ~= nil and unknownOut:find("Unknown command", 1, true) ~= nil,
+  "an unknown command is named, tagged like MDW's own messages")
 check(uiRun("show quets"):find("No widget matches", 1, true) ~= nil, "an unknown widget is named")
 check(uiRun("show c"):find("Character", 1, true) ~= nil,
   "an ambiguous widget prefix lists the candidates by title")
@@ -1558,8 +1558,11 @@ local function feedJson(entries)
   for _, e in ipairs(entries) do
     local changes = {}
     for _, c in ipairs(e[3]) do changes[#changes + 1] = '"' .. c .. '"' end
-    out[#out + 1] = string.format('{"version":"%s","released":"%s","changes":[%s]}',
-      e[1], e[2], table.concat(changes, ","))
+    -- e[4], when given, is the MDW that release requires. It travels in the
+    -- feed because the pin lives inside the package being installed.
+    local mdwField = e[4] and string.format('"mdw":"%s",', e[4]) or ""
+    out[#out + 1] = string.format('{"version":"%s","released":"%s",%s"changes":[%s]}',
+      e[1], e[2], mdwField, table.concat(changes, ","))
   end
   return "[" .. table.concat(out, ",") .. "]"
 end
@@ -1585,6 +1588,16 @@ check(#mdwui.parseReleases('[{"released":"2026-01-01","changes":["x"]}]') == 0,
   "an entry with no version is skipped")
 check(#mdwui.parseReleases('[{"version":"9.9.9"}]') == 1,
   "an entry with no changes is still a release")
+-- The MDW a release needs travels in the feed: minMdwVersion lives INSIDE the
+-- package, so a running client cannot read the next version's requirement any
+-- other way - and it has to know BEFORE installing, because a package
+-- installed against too old an MDW refuses to build.
+local mdwFeed = mdwui.parseReleases('[{"version":"9.9.9","mdw":"1.2.3"}]')
+check(mdwFeed[1].mdw == "1.2.3", "a release's MDW requirement is read from the feed")
+check(mdwui.parseReleases('[{"version":"9.9.9"}]')[1].mdw == nil,
+  "and an entry without one asks for nothing extra")
+check(mdwui.parseReleases('[{"version":"9.9.9","mdw":7}]')[1].mdw == nil,
+  "a wrong-typed requirement is dropped, not trusted")
 local odd = mdwui.parseReleases('[{"version":"9.9.9","released":7,"changes":"nope"}]')
 check(#odd == 1 and odd[1].date == nil and #odd[1].notes == 0,
   "wrong-typed fields are dropped, not trusted")
@@ -1656,6 +1669,40 @@ local assetUrl = H.downloads[#H.downloads].url
 check(assetUrl == mdwui.packageUrl,
   "the install link downloads the package the server hosts, at its fixed path")
 
+-- A package Mudlet would accept: zip magic, and past the size floor.
+local PACKAGE_BYTES = "PK\003\004" .. string.rep("m", 20100)
+
+-- MDW FIRST when the release needs a newer one. Installing the package first
+-- leaves it unable to BUILD until the framework catches up - its gate refuses
+-- and the player is left with no UI and a line of explanation, which is the
+-- window a live client fell into. Asking first means the package lands on an
+-- MDW that already satisfies it.
+local orderVersion = mdw.version
+mdw.version = "0.4.0" -- older than anything the feed below asks for
+mdwui.state.updateBusyAt, mdwui.state.mdwFetchedFor, mdwui.state.mdwFile = nil, nil, nil
+mdwui.checkForUpdate(true)
+feed(feedJson({ { V_LATEST, "2026-09-01", { "needs a newer framework" }, "9.9.9" } }))
+uiRun("update install")
+local askedFor = H.downloads[#H.downloads].url
+check(askedFor:find("MDW.mpackage", 1, true) ~= nil,
+  "an update needing a newer MDW fetches MDW first, not the package")
+check(askedFor:find("v9.9.9", 1, true) ~= nil,
+  "and fetches the version the FEED named, not this package's own pin")
+-- MDW lands, and the held-back update carries on by itself.
+local mdwLanded = H.downloads[#H.downloads].path
+writeFile(mdwLanded, PACKAGE_BYTES)
+mdw.version = "9.9.9"
+raiseEvent("sysDownloadDone", mdwLanded)
+raiseEvent("sysInstallPackage", "MDW")
+H.flushTimers()
+check(H.downloads[#H.downloads].url == mdwui.packageUrl,
+  "and once MDW is in, the package download resumes on its own")
+-- Straight out of the event, not from a timer: MDW answers this same event by
+-- re-running setup, and that teardown kills our timers - a deferred resume
+-- would be destroyed before it could fire.
+mdw.version = orderVersion
+mdwui.state.updateBusyAt, mdwui.state.updateMdw = nil, nil
+
 -- A GitHub error page is not a package: verification runs BEFORE anything is
 -- uninstalled, because the running UI is the only copy the player has.
 local uninstallsBefore = #H.uninstalled
@@ -1679,7 +1726,6 @@ check(table.concat(H.main._echoed):find("only %d+ bytes") ~= nil
 -- Installed as a MODULE: Mudlet reloads a module from its own file, so the
 -- verified download becomes that file - copied only after verification, or a
 -- bad fetch would have destroyed the working copy on the way in.
-local PACKAGE_BYTES = "PK\003\004" .. string.rep("m", 20100)
 local modulePath = H.homeDir .. "/mdwui-module-copy.mpackage"
 writeFile(modulePath, "the previous module")
 H.modulePaths[mdwui.packageName] = modulePath

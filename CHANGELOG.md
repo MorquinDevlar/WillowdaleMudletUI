@@ -22,6 +22,14 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- When an update needs a newer MDW, the UI now fetches MDW **first** and then
+  updates itself. Before, it installed the new version and then discovered it
+  could not start, so you were left with no interface until the framework
+  caught up.
+- Messages are now written `[ UI - like this ]`, matching MDW's, with a blank
+  line between one topic and the next instead of a single unbroken block.
+
 ## 0.1.13 - 2026-08-22
 
 ### Changed

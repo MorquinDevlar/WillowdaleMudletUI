@@ -59,7 +59,14 @@ mdwui.minMdwVersion = "0.6.0"
 -- (MDW.mpackage) as a contract, the same shape as our own releaseUrlFormat
 -- below. Verify a tag exists before pinning it: an unpublished version here
 -- makes every bootstrap download a GitHub error page instead of a package.
-mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.6.0/MDW.mpackage"
+-- DERIVED, not a second literal: the updater has to be able to fetch an MDW
+-- version this package's own constant does not name. When a release requires a
+-- newer MDW than the one running, the requirement arrives in the feed (the
+-- `mdw` field of releases.json) and the URL for it is built from the same
+-- contract - which also makes it impossible for the pin and the URL to drift
+-- apart, the thing the smoke suite had to check for before.
+mdwui.mdwUrlFormat = "https://github.com/MorquinDevlar/mdw/releases/download/v%s/MDW.mpackage"
+mdwui.mdwUrl = string.format(mdwui.mdwUrlFormat, mdwui.minMdwVersion)
 
 -- Where the self-updater (MDWUI_Update.lua) looks. The GAME SERVER hosts both
 -- files, and a player's client reads nothing else: a push to this repo's main

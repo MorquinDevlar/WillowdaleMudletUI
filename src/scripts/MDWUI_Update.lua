@@ -134,6 +134,11 @@ function mdwui.parseReleases(text)
       local release = {
         version = entry.version,
         date = type(entry.released) == "string" and entry.released or nil,
+        -- The MDW this release needs. It travels in the feed because the pin
+        -- lives INSIDE the package: a running client cannot read the next
+        -- version's requirement any other way, and finding out by installing
+        -- it is the order that leaves a UI installed but unable to start.
+        mdw = type(entry.mdw) == "string" and entry.mdw or nil,
         notes = {},
       }
       if type(entry.changes) == "table" then
@@ -262,7 +267,7 @@ function mdwui.checkForUpdate(manual)
   mdwui.state.updateManual = manual and true or false
   mdwui.state.updateFeedPath = string.format("%s/%s-releases.json", homeDir(), mdwui.packageName)
   if manual then
-    mdwui.say(string.format("Checking for a newer %s...", mdwui.packageName))
+    mdwui.sayTopic(string.format("Checking for a newer %s...", mdwui.packageName))
   end
   downloadFile(mdwui.state.updateFeedPath, mdwui.releasesUrl)
   return true
@@ -296,6 +301,7 @@ local function readFeed(path)
     return
   end
   mdwui.state.updateVersion = newer[1].version
+  mdwui.state.updateMdw = newer[1].mdw
   announce(newer)
 end
 
@@ -322,10 +328,31 @@ function mdwui.installUpdate()
     mdwui.say("This Mudlet cannot download files.")
     return
   end
+
+  -- MDW FIRST when this release needs a newer one. Doing it the other way
+  -- round installs a package that cannot build: its gate refuses, the player
+  -- is left with no UI and a line of explanation, and the framework only
+  -- arrives afterwards through the bootstrap. Upgrading first means the new
+  -- package installs into an MDW that already satisfies it and starts at once.
+  -- The swap resumes from onInstallPackage when MDW reports in.
+  if not mdwui.mdwReady() then
+    local needed = mdwui.requiredMdwVersion()
+    mdwui.sayTopic(string.format("%s %s needs MDW %s - fetching that first.",
+      mdwui.packageName, version, needed))
+    mdwui.state.updateAfterMdw = true
+    if not mdwui.ensureMdw() then
+      -- ensureMdw said why, or had already tried this session for this
+      -- version. Either way the update cannot proceed on its own.
+      mdwui.state.updateAfterMdw = nil
+      mdwui.sayBad("The update cannot go ahead until MDW is updated.")
+    end
+    return
+  end
+
   mdwui.state.updateUrl = mdwui.packageUrl
   mdwui.state.updateFile = string.format("%s/%s-%s.mpackage", homeDir(), mdwui.packageName, version)
   mdwui.state.updateBusyAt = os.time()
-  mdwui.say(string.format("Downloading %s %s...", mdwui.packageName, version))
+  mdwui.sayTopic(string.format("Downloading %s %s...", mdwui.packageName, version))
   downloadFile(mdwui.state.updateFile, mdwui.state.updateUrl)
 end
 
@@ -537,7 +564,11 @@ end
 -- downgrades - a player on a newer MDW than our minimum is left alone - which
 -- is what makes this safe to call from any trigger, as often as one fires.
 function mdwui.ensureMdw()
-  if mdwui.mdwSatisfied() then return false end
+  -- requiredMdwVersion, not minMdwVersion: a pending update can need a HIGHER
+  -- MDW than this package pins, and the whole point of asking first is to have
+  -- that one in place before the swap.
+  local needed = mdwui.requiredMdwVersion()
+  if mdwui.mdwReady() then return false end
   -- One attempt per session PER REQUIREMENT. This used to be a plain "have we
   -- fetched this session" boolean, and mdwui.state survives a package swap by
   -- design - so a session that had ever bootstrapped MDW could never bootstrap
@@ -550,7 +581,7 @@ function mdwui.ensureMdw()
   -- Keyed on the version being asked for, a NEW requirement gets a fresh
   -- attempt, while a dead network still cannot turn one failure into a retry
   -- loop: the pin does not change until the player takes another update.
-  if mdwui.state.mdwFetchedFor == mdwui.minMdwVersion then return false end
+  if mdwui.state.mdwFetchedFor == needed then return false end
   -- The updater and the bootstrap share one downloader guard so neither can
   -- land on the other's file. The overlap is nearly impossible in practice -
   -- the update check starts from buildUI, which the version gate turns back
@@ -559,7 +590,7 @@ function mdwui.ensureMdw()
   -- Set before the downloader check, not after it: a Mudlet with no
   -- downloadFile will not grow one mid-session, so that line is worth saying
   -- exactly as often as the fetch itself - once.
-  mdwui.state.mdwFetchedFor = mdwui.minMdwVersion
+  mdwui.state.mdwFetchedFor = needed
   -- MDW installed as a MODULE is not ours to swap. getPackages() does not
   -- list modules, so the check below would read "absent" and installPackage
   -- would leave a package named MDW beside the module - two copies of the
@@ -568,22 +599,42 @@ function mdwui.ensureMdw()
   -- choice, so it stays the player's to update.
   if getModulePath and getModulePath("MDW") then
     mdwui.say(string.format("%s needs MDW %s or newer, and MDW is installed here as a module.",
-      mdwui.packageName, mdwui.minMdwVersion))
+      mdwui.packageName, needed))
     sayManualMdw()
     return false
   end
   if not downloadFile then
     mdwui.say(string.format("%s needs MDW %s, and this Mudlet cannot download it.",
-      mdwui.packageName, mdwui.minMdwVersion))
+      mdwui.packageName, needed))
     sayManualMdw()
     return false
   end
   mdwui.state.mdwFile = homeDir() .. "/MDW.mpackage"
   mdwui.state.updateBusyAt = os.time()
-  mdwui.say(string.format("%s needs the MDW framework (%s or newer) - fetching it now...",
-    mdwui.packageName, mdwui.minMdwVersion))
-  downloadFile(mdwui.state.mdwFile, mdwui.mdwUrl)
+  mdwui.sayTopic(string.format("%s needs the MDW framework (%s or newer) - fetching it now...",
+    mdwui.packageName, needed))
+  downloadFile(mdwui.state.mdwFile, string.format(mdwui.mdwUrlFormat, needed))
   return true
+end
+
+--- The MDW version this client needs right now: normally its own pin, but a
+-- pending update can require a HIGHER one. The requirement travels in the feed
+-- because the pin lives INSIDE the package being installed - a running 0.1.13
+-- cannot know what 0.1.14 will demand, and finding out by installing it is
+-- exactly the order that leaves a player with a UI that will not start.
+function mdwui.requiredMdwVersion()
+  local wanted = mdwui.state.updateMdw
+  if type(wanted) == "string" and wanted ~= ""
+    and mdwui.versionAtLeast(wanted, mdwui.minMdwVersion)
+    and not mdwui.versionAtLeast(mdwui.minMdwVersion, wanted) then
+    return wanted
+  end
+  return mdwui.minMdwVersion
+end
+
+--- Is the MDW that is running new enough for what we need right now?
+function mdwui.mdwReady()
+  return mdwui.versionAtLeast(mdw and mdw.version, mdwui.requiredMdwVersion())
 end
 
 --- The MDW package landed. Verified FIRST, like the self-update above and for
@@ -687,6 +738,18 @@ function mdwui.onInstallPackage(_, package)
       os.remove(mdwui.state.mdwFile)
       mdwui.state.mdwFile = nil
     end
+    -- An update held back until MDW was new enough: now it is, so carry on.
+    --
+    -- Called straight out, NOT from a tempTimer. MDW handles this same event
+    -- by re-running setup, whose teardown fires our own mdw.onTeardown hook -
+    -- and that kills our timers. A deferred resume is therefore destroyed
+    -- before it can fire, and the update simply stops with no UI and nothing
+    -- said. Nothing here re-enters Mudlet's installer either: installUpdate
+    -- only starts a download.
+    if mdwui.state.updateAfterMdw then
+      mdwui.state.updateAfterMdw = nil
+      mdwui.installUpdate()
+    end
     return
   end
   if package ~= mdwui.packageName then return end
@@ -695,6 +758,7 @@ function mdwui.onInstallPackage(_, package)
   -- The offer is spent: an install line still on the screen from before the
   -- swap would otherwise re-download the version now running.
   mdwui.state.updateVersion = nil
+  mdwui.state.updateMdw = nil
   if mdwui.state.updateFile then
     -- updateFile set means this install is OUR swap finishing, not a player
     -- installing the package by hand - so this is the one place that can

@@ -86,20 +86,39 @@ for raw in (readAll("CHANGELOG.md") .. "\n"):gmatch("([^\n]*)\n") do
 end
 flush()
 
+-- The MDW this build requires, read from the package itself. Stamped on the
+-- NEWEST entry only: that is the release being cut, and it is the only one an
+-- updater ever installs. What older releases required is not recorded anywhere
+-- and must not be guessed - a wrong requirement here would send a client to
+-- fetch an MDW it does not need.
+--
+-- WHY the feed carries it at all: minMdwVersion lives INSIDE the package, so a
+-- running client cannot read the next version's requirement any other way. It
+-- needs to know BEFORE installing, because a package installed against too old
+-- an MDW refuses to build.
+local minMdw = readAll("src/scripts/MDWUI_Config.lua"):match('mdwui%.minMdwVersion%s*=%s*"([^"]+)"')
+if not minMdw then
+  io.stderr:write("changelog_to_releases: could not read mdwui.minMdwVersion\n")
+  os.exit(1)
+end
+
 local blocks = {}
-for _, release in ipairs(releases) do
+for i, release in ipairs(releases) do
   local lines = {
     "    {",
     '        "version": ' .. jsonString(release.version) .. ",",
     '        "released": ' .. jsonString(release.released or "") .. ",",
   }
+  if i == 1 then
+    lines[#lines + 1] = '        "mdw": ' .. jsonString(minMdw) .. ","
+  end
   if #release.changes == 0 then
     lines[#lines + 1] = '        "changes": []'
   else
     lines[#lines + 1] = '        "changes": ['
-    for i, change in ipairs(release.changes) do
+    for ci, change in ipairs(release.changes) do
       lines[#lines + 1] = "            " .. jsonString(change)
-        .. (i < #release.changes and "," or "")
+        .. (ci < #release.changes and "," or "")
     end
     lines[#lines + 1] = "        ]"
   end

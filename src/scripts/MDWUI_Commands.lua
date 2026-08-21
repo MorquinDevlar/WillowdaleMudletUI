@@ -80,7 +80,16 @@ end
 -- client said looks for one marker, not two.
 function mdwui.say(text)
   if not cecho then return end
-  cecho(string.format("<%s>[ui] <%s>%s\n", P.tag, P.text, tostring(text)))
+  cecho(string.format("<%s>[ UI - <%s>%s<%s> ]\n", P.tag, P.text, tostring(text), P.tag))
+end
+
+--- The first line of a new topic: the same message with a blank line above it.
+-- A run of these otherwise reads as one wall - an update, the framework it
+-- needed, and the rebuild that followed all ran together with nothing to say
+-- where one ended and the next began.
+function mdwui.sayTopic(text)
+  if cecho then cecho("\n") end
+  mdwui.say(text)
 end
 
 --- The same line, painted as a FAILURE. Not a second marker - the [ui] tag
@@ -91,7 +100,7 @@ end
 -- not fetch. Not for ordinary negatives like a toggle being off.
 function mdwui.sayBad(text)
   if not cecho then return end
-  cecho(string.format("<%s>[ui] <%s>%s\n", P.tag, P.bad, tostring(text)))
+  cecho(string.format("<%s>[ UI - <%s>%s<%s> ]\n", P.tag, P.bad, tostring(text), P.tag))
 end
 
 --- A block line without the tag: listings, tables, the overview.
