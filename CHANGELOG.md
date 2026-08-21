@@ -22,6 +22,11 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- The UI now asks for MDW 0.5.1, and fetches it for you if you are on an older
+  one. You will see the interface disappear for a moment while MDW is replaced,
+  then rebuild itself.
+
 ## 0.1.10 - 2026-08-22
 
 ### Added

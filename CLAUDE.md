@@ -34,7 +34,7 @@ reports that name in sysUninstallPackage, and cleanup only fires on a match.
 Consequence: `mdwui.buildUI()` must stay idempotent - `Widget:new` returns
 existing widgets, and re-running must not duplicate anything.
 
-MDW >= `mdwui.minMdwVersion` (0.5.0) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.5.1) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with

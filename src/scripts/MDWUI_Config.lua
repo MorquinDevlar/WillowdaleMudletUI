@@ -34,11 +34,17 @@ mdwui.version = "0.1.10"
 -- from MDW 0.3.0 on, so nil means an older MDW still. Bump when we adopt a
 -- newer MDW API.
 --
--- 0.5.0 rather than 0.4.x because the font family is the delivery mechanism
+-- 0.5.x rather than 0.4.x because the font family is the delivery mechanism
 -- for it: a player sitting on 0.4.1 satisfies a 0.4.0 minimum, so ensureMdw
 -- would leave them there and applyMainFont would never take effect. The
 -- typeface verb itself stays guarded through capability() regardless.
-mdwui.minMdwVersion = "0.5.0"
+--
+-- 0.5.1 rather than 0.5.0 is NOT an API adoption - 0.5.1 is documentation
+-- only. It was raised deliberately to exercise the bootstrap's upgrade path
+-- (MDW present but too old) on a real client, which nothing else had ever
+-- done. Free to do while the package has no players; not a precedent for
+-- moving the pin without a reason.
+mdwui.minMdwVersion = "0.5.1"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, MDWUI_Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
@@ -52,7 +58,7 @@ mdwui.minMdwVersion = "0.5.0"
 -- (MDW.mpackage) as a contract, the same shape as our own releaseUrlFormat
 -- below. Verify a tag exists before pinning it: an unpublished version here
 -- makes every bootstrap download a GitHub error page instead of a package.
-mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.5.0/MDW.mpackage"
+mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.5.1/MDW.mpackage"
 
 -- Where the self-updater (MDWUI_Update.lua) looks. The GAME SERVER hosts both
 -- files, and a player's client reads nothing else: a push to this repo's main
