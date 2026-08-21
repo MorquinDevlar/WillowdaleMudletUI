@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Cut a Willowdale MUD UI release. Usage: tools/release.sh X.Y.Z
+# Cut a WillowdaleMUD UI release. Usage: tools/release.sh X.Y.Z
 #
 # One command for the whole sequence, so every release is made the same way:
 # bump the two version strings, run the verification gate, build the package,
@@ -151,7 +151,7 @@ git add mfile src/scripts/MDWUI_Config.lua CHANGELOG.md
 git commit -m "Release $version"
 
 step "Tagging $tag"
-git tag -a "$tag" -m "Willowdale MUD UI $version"
+git tag -a "$tag" -m "WillowdaleMUD UI $version"
 
 # main goes up before the release exists, so the CHANGELOG the updater fetches
 # raw from main already carries the section for the version it is about to see.
@@ -165,6 +165,6 @@ step "Publishing the GitHub release"
 release_url=$(gh release create "$tag" build/WillowdaleMudletUI.mpackage --title "$tag" --notes-file "$notes_file")
 printf '    %s\n' "$release_url"
 
-printf '\nReleased Willowdale MUD UI %s\n' "$version"
+printf '\nReleased WillowdaleMUD UI %s\n' "$version"
 printf '  tag:     %s\n' "$tag"
 printf '  release: %s\n' "$release_url"

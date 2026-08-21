@@ -1,4 +1,4 @@
-# Willowdale MUD UI (WillowdaleMudletUI) for Mudlet
+# WillowdaleMUD UI (WillowdaleMudletUI) for Mudlet
 
 A Mudlet package that recreates the Willowdale web client's widgets on top of
 MDW (Mudlet Dockable Widgets). Lua 5.1 only (Mudlet's runtime) - no goto, no

@@ -1,7 +1,7 @@
 --[[
   MDWUI_Config.lua
   Namespace, static configuration, and the MDW integration seeds for the
-  Willowdale MUD UI.
+  WillowdaleMUD UI.
 
   This package is a CONSUMER of MDW (Mudlet Dockable Widgets). It follows
   MDW's integration contract: at load time it only seeds tables into the

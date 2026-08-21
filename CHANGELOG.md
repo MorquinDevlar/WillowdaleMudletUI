@@ -22,6 +22,10 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- The UI is now called **WillowdaleMUD UI** - the name Mudlet's package
+  manager shows, and the one the `ui` screen opens with.
+
 ## 0.1.0 - 2026-08-21
 
 ### Added

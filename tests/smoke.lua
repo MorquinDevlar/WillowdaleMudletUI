@@ -1099,7 +1099,7 @@ end
 
 local sentBeforeUi = #H.sent
 local overview = uiRun("")
-check(overview:find("Welcome to the Willowdale MUD UI", 1, true) ~= nil,
+check(overview:find("Welcome to the WillowdaleMUD UI", 1, true) ~= nil,
   "bare ui opens with the welcome banner")
 -- The placeholders survive the echo: cecho hands a tag it does not recognise
 -- straight to the text stream (Mudlet's _Echos.Process), so the overview can

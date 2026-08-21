@@ -1,4 +1,4 @@
--- Luacheck configuration for MDW_UI (Willowdale MUD UI for Mudlet).
+-- Luacheck configuration for MDW_UI (WillowdaleMUD UI for Mudlet).
 -- Mudlet runs Lua 5.1 / LuaJIT and injects a large global API surface.
 
 std = "lua51+luajit"

@@ -1563,7 +1563,7 @@ end
 -- called, what it is set to now, and what it accepts.
 function mdwui.renderOverview()
   line("")
-  line(string.format("<%s>          ****    Welcome to the Willowdale MUD UI    ****", P.banner))
+  line(string.format("<%s>          ****    Welcome to the WillowdaleMUD UI    ****", P.banner))
   line("")
   -- Name and version share one colour run per package: the pair has to read
   -- as one word to anything scanning the plain text.

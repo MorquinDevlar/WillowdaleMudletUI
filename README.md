@@ -1,6 +1,6 @@
-# Willowdale MUD UI for Mudlet
+# WillowdaleMUD UI for Mudlet
 
-The Willowdale MUD interface for [Mudlet](https://www.mudlet.org/), built on
+The WillowdaleMUD interface for [Mudlet](https://www.mudlet.org/), built on
 [MDW (Mudlet Dockable Widgets)](https://github.com/MorquinDevlar/mdw). It
 recreates the Willowdale web client's widget layout, driven live by the game's
 GMCP feed:
