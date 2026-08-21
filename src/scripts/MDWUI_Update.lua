@@ -651,6 +651,13 @@ function mdwui.onInstallPackage(_, package)
   -- swap would otherwise re-download the version now running.
   mdwui.state.updateVersion = nil
   if mdwui.state.updateFile then
+    -- updateFile set means this install is OUR swap finishing, not a player
+    -- installing the package by hand - so this is the one place that can
+    -- honestly say the update is over. Say so: the swap prints "Installing..."
+    -- and then, on success, printed nothing at all, which reads exactly like
+    -- the failure it replaced. A player should not have to guess whether to
+    -- keep waiting.
+    mdwui.say(string.format("%s %s installed - done.", mdwui.packageName, mdwui.version))
     os.remove(mdwui.state.updateFile)
     mdwui.state.updateFile = nil
   end

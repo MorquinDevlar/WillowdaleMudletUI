@@ -1746,8 +1746,15 @@ for _, name in ipairs(UI_ORDER) do
   assert(pcall(dofile, "src/scripts/" .. name .. ".lua"), "failed reloading " .. name)
 end
 H.flushTimers()
+H.main._echoed = {}
 raiseEvent("sysInstallPackage", mdwui.packageName)
 check(mdwui.state.updateInstalled == true, "the reinstalled package reports back on sysInstallPackage")
+-- A silent success reads exactly like the failure it replaced: the swap says
+-- "Installing..." and then, until now, nothing at all. Say when it is over.
+local doneLine = table.concat(H.main._echoed)
+check(doneLine:find("installed - done", 1, true) ~= nil
+  and doneLine:find(mdwui.version, 1, true) ~= nil,
+  "a finished swap says so, and names the version now running")
 check(io.exists(swapPath) == false, "and the temp package file is cleaned up after it lands")
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
   "the swapped-in package rebuilt the whole UI from its seeds")
