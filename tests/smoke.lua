@@ -1835,13 +1835,13 @@ check(io.exists(swapPath) == false, "and the temp package file is cleaned up aft
 -- itself rather than leaving a player to work it out.
 mdw.cleanupGame(mdwui.packageName) -- exactly what reaps a stamped owner's things
 check(mdw.widgets["Journal"] == nil, "a late reap can still take the fresh widgets")
-H.flushTimers()
+-- MDW puts it right on the install EVENT, with nothing timed: it re-runs a
+-- registered game package's onReady when Mudlet reports the install finished.
+H.onInstallScripts() -- the new copy's scripts re-seed the registration
+raiseEvent("sysInstallPackage", mdwui.packageName)
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
-  "so the swap rebuilds once more afterwards, and the UI comes back by itself")
--- cleanupGame also strips the onReady/onTeardown registrations, which a real
--- reinstall re-seeds by running the package's scripts. Do the same, or the
--- rest of the suite runs against a package MDW no longer knows about.
-H.onInstallScripts()
+  "and the install event brings the UI back, without a timer anywhere")
+
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
   "the swapped-in package rebuilt the whole UI from its seeds")
 check(#H.downloads == downloadsBeforeSwap, "the rebuild after the swap does not re-check the feed")

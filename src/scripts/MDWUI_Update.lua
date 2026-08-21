@@ -770,24 +770,13 @@ function mdwui.onInstallPackage(_, package)
     os.remove(mdwui.state.updateFile)
     mdwui.state.updateFile = nil
   end
-  -- The UI should already be back: Mudlet runs the new scripts inside
-  -- installPackage and their late-join rebuilds through mdw.runReadyCallbacks,
-  -- with nothing to activate. A live client proved that is not always enough -
-  -- it came back with its prompt gauges and nothing else, and `ui rebuild` put
-  -- it right, so the widgets HAD been built and something reaped them after
-  -- the fact (the old copy's uninstall bookkeeping arriving late, against an
-  -- ownership stamp the new copy shares).
+  -- Nothing here rebuilds the UI. MDW does it, on this same event: it watches
+  -- sysInstallPackage, and for a registered game package re-runs its onReady
+  -- once Mudlet reports the install finished. That is the first moment the old
+  -- copy's creations have been reaped and the new copy's registration is
+  -- seeded again - which is why this used to be a one-second timer here, and
+  -- why a timer was the wrong answer. MDW 0.6.4 and newer.
   --
-  -- So ask once more, after the dust. buildUI is idempotent by contract -
-  -- Widget:new returns existing widgets and re-running duplicates nothing - so
-  -- this costs nothing when the UI is whole and repairs it when it is not.
-  -- One second for the same reason the old swap waited one: it is long enough
-  -- for Mudlet to have finished with the package it was told to remove.
-  local repairId = tempTimer(1, function()
-    if mdwui.mdwSatisfied() then mdwui.buildUI() end
-  end)
-  if repairId then mdwui.addTimer(repairId) end
-
   -- This package can be installed into a profile that has no MDW at all, and
   -- this event is the first moment it can find out. Deferred by a tick, since
   -- Mudlet's installer must not be re-entered from inside its own event.

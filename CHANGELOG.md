@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- The interface comes back by itself after an update, instead of returning
+  with only the prompt bar and needing `ui rebuild`. MDW now restores it when
+  Mudlet reports the package installed, rather than the UI waiting a second and
+  hoping.
+
 ## 0.1.17 - 2026-08-22
 
 ### Changed

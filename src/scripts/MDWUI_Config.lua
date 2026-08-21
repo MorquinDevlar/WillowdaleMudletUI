@@ -45,7 +45,7 @@ mdwui.version = "0.1.17"
 -- cannot do for itself. The pre-0.6.0 path is kept as a fallback, because the
 -- version gate stops this package BUILDING under an older MDW but `ui update
 -- install` still works there, and that is how a player gets out of it.
-mdwui.minMdwVersion = "0.6.3"
+mdwui.minMdwVersion = "0.6.4"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, MDWUI_Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
