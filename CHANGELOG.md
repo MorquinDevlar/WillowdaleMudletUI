@@ -31,6 +31,10 @@ out of the version number alone - so neither may change.
   package installed, the saved layout and the font it applied - instead of
   leaving the framework behind.
 
+### Changed
+- `ui height <widget>` with no size now tells you the row's height and its
+  share of the window, instead of explaining the syntax.
+
 ## 0.1.5 - 2026-08-21
 
 ### Changed

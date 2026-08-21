@@ -721,13 +721,26 @@ COMMANDS = {
     end },
 
   { name = "height",
-    usage = "ui height <widget> <px|+n|-n>",
-    help = "Set the height of the widget's dock row. The bottom row of a dock auto-fills and refuses.",
+    usage = "ui height <widget> [<px|+n|-n>]",
+    help = "Set the height of the widget's dock row, or report it when given no size. "
+      .. "The bottom row of a dock auto-fills and refuses.",
     run = function(words)
       local w = mdwui.resolveWidget(words[2])
       if not w then return end
       local group = (w.stackId and mdw.widgets[w.stackId]) or w
       local current = (group.container and group.container:get_height()) or 0
+      -- No size asked for: answer with the height instead of explaining the
+      -- syntax. A row that is the wrong size is the one thing this verb is
+      -- ever used to investigate, and the share of the window is what makes a
+      -- number meaningful - the first-run defaults are set as fractions, and
+      -- the bottom row of a dock takes whatever the others leave.
+      if not words[3] then
+        local _, winH = getMainWindowSize()
+        local pct = (winH or 0) > 0 and math.floor((current / winH) * 100 + 0.5) or 0
+        mdwui.say(string.format("%s row is %dpx, %d%% of a %dpx window.",
+          widgetTitle(w), current, pct, winH or 0))
+        return
+      end
       local px = parseSize(words[3], current)
       if not px then
         mdwui.say("Give a height in pixels, e.g. ui height "
@@ -1501,7 +1514,7 @@ local OVERVIEW = {
       value = function() return tostring(mdwui.tbl(mdw.config).leftDockWidth) end },
     { cmd = "width right", link = "width right", opts = "<px>|+n|-n",
       value = function() return tostring(mdwui.tbl(mdw.config).rightDockWidth) end },
-    { cmd = "height <widget>", link = "height", opts = "<px>|+n|-n   the row it sits in" },
+    { cmd = "height <widget>", link = "height", opts = "[<px>|+n|-n]   the row it sits in; bare reports it" },
     { cmd = "float <widget>", link = "float", opts = "its own floating group, centred" },
     { cmd = "dock <widget>", link = "dock",
       opts = "left|right [top|bottom]   its own group on that side" },

@@ -1721,6 +1721,15 @@ check(printedBullets <= 40 and capped:find("more lines not shown", 1, true) ~= n
 -- The verb and its overview row, the rule for every player-facing toggle.
 check(uiRun("help update"):find("ui update", 1, true) ~= nil, "ui help update explains the verb")
 
+-- A row that is the wrong size is the only reason this verb gets typed, so the
+-- bare form answers with the number instead of explaining the syntax.
+local heightReport = uiRun("height equipment")
+check(heightReport:find("row is", 1, true) ~= nil and heightReport:find("px", 1, true) ~= nil
+  and heightReport:find("% of a", 1, true) ~= nil,
+  "bare ui height reports the row's height and its share of the window")
+check(heightReport:find("Give a height", 1, true) == nil,
+  "and does not answer a question with the syntax")
+
 -- Client.GUI: the game drives this package's lifecycle over the same message
 -- Mudlet uses to install it natively, so the gomudui guard is what keeps the
 -- two apart.
