@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.0 - 2026-08-21
+
 ### Added
 - **The Willowdale widget set on MDW.** Character, Combat, Affects, Group,
   Equipment, Inventory, Keyring, Forage, Quests, Journal, Communications and
