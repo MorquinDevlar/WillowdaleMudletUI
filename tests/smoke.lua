@@ -163,6 +163,18 @@ check(mdw.widgets["Comm"].stackId == "MDWUI_Comms"
   and mdw.widgets["Journal"].stackId == "MDWUI_Comms", "Comm|Quests|Journal grouped")
 check(mdw.widgets["MDWUI_Char"].docked == "left"
   and mdw.widgets["MDWUI_Comms"].docked == "right", "groups docked to the web-client sides")
+-- First-run heights are a fraction of the window, not pixels: the items group
+-- has to be tall enough to show a whole inventory without scrolling, and
+-- MDWUI_Char is MDW's fill row, whose budget clamps at zero - so a fixed
+-- height big enough for a large screen would silently collapse it on a small
+-- one. Asserted as a RATIO so the numbers can be retuned without a test edit.
+local _, smokeWinH = getMainWindowSize()
+local itemsH = mdw.widgets["MDWUI_Items"].container:get_height()
+local statusH = mdw.widgets["MDWUI_Status"].container:get_height()
+check(itemsH > statusH * 2,
+  "the items group opens far taller than the status group - an inventory is a list")
+check(itemsH < smokeWinH * 0.5 and statusH < smokeWinH * 0.25,
+  "and neither claims so much of the window that the character fill row is squeezed out")
 check(mdw.widgets["Map"].mapper ~= nil, "Map embeds the native mapper")
 
 -- 3. Startup requests: full payload + native map feed

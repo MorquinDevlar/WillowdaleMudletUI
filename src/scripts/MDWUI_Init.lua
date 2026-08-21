@@ -219,8 +219,27 @@ function mdwui.buildUI()
 
   -- Default grouping (first run only - see defaultGroup). Order builds the
   -- left dock top-to-bottom; the last group in each dock auto-fills.
-  defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", 180)
-  defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", 320)
+  --
+  -- Heights are a FRACTION of the window, not pixels, because the web client
+  -- sizes this dock by percentage (Affects 25%, items 50%, character 25% -
+  -- dockview-widgets.js) and a pixel count cannot express that. The items
+  -- group gets by far the most: an inventory is a LIST, and the one thing a
+  -- player wants from it on a first run is to see all of it without
+  -- scrolling, while Affects is a handful of timers that never needed the
+  -- 180px it used to hold.
+  --
+  -- Proportional also because MDWUI_Char below is MDW's FILL row - it absorbs
+  -- whatever these two do not claim, and its budget clamps at zero
+  -- (reorganizeDock's fillRowBudget). A fixed height large enough to show a
+  -- full inventory on a big screen would therefore collapse the character
+  -- group entirely on a laptop, silently. Scaling both keeps the ratio
+  -- wherever the window lands.
+  --
+  -- All first-run only: defaultGroup skips any widget whose placement a saved
+  -- layout already owns.
+  local _, winH = getMainWindowSize()
+  defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", math.floor(winH * 0.18))
+  defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", math.floor(winH * 0.46))
   defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left")
   defaultGroup({ "Comm", "Quests", "Journal" }, "MDWUI_Comms", "right")
   local map = mdw.widgets["Map"]

@@ -23,7 +23,7 @@ read_globals = {
   -- guarded, so an older Mudlet without it degrades instead of erroring.
   "json_to_value",
   "deleteNamedEventHandler",
-  "getMudletHomeDir",
+  "getMudletHomeDir", "getMainWindowSize",
   -- The self-updater (MDWUI_Update.lua): Mudlet's asynchronous downloader and
   -- the package/module installers. downloadFile is read guarded, the rest are
   -- only ever reached after it answered.

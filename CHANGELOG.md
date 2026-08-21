@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- Inventory, Equipment and Forage open with room to show a full inventory
+  without scrolling, and Affects and Keyring no longer take more height than
+  they use. This is the first-run layout only - once you have moved or resized
+  anything, your own layout is kept.
+
 ## 0.1.2 - 2026-08-21
 
 ### Changed
