@@ -168,7 +168,7 @@ function getMudletHomeDir() return H.homeDir end
 function calcFontSize(size) return size * 0.6, size * 1.2 end
 function getFontSize() return 11 end
 function setFontSize() end
-function getAvailableFonts() return { ["Fira Code"] = true, ["Bitstream Vera Sans Mono"] = true } end
+function getAvailableFonts() return { ["Fira Code Willowdale"] = true, ["Bitstream Vera Sans Mono"] = true } end
 function setBorderLeft() end
 function setBorderRight() end
 function setBorderTop() end

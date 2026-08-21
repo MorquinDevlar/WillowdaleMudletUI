@@ -279,7 +279,7 @@ mdw.gameConfig = mdw.gameConfig or {}
 -- "Uninstall WillowdaleUI", the ready message names it likewise.
 mdw.gameConfig.uiName = "WillowdaleUI"
 -- The face this UI is drawn in, and the reason the package ships
--- FiraCode-Regular.ttf: Mudlet loads a package's fonts on install and
+-- FiraCodeWillowdale-Regular.ttf: Mudlet loads a package's fonts on install and
 -- unloads them on uninstall, so the font is ours to supply and ours to name.
 -- Seeded rather than assumed - MDW's own default is a neutral monospace, and
 -- gameConfig is the seam where a game states its preference (MDW validates it
@@ -288,11 +288,19 @@ mdw.gameConfig.uiName = "WillowdaleUI"
 -- matches on family. Fira Code is what the web client and the website render
 -- in, so a player moving between them sees one face. The bundled build is the
 -- web side's own: no ligature features (its GSUB carries only ccmp and locl,
--- so "->" stays two characters) and the full box-drawing range. It is a
--- SUBSET though - any glyph outside it, like U+2228, gets silently drawn from
--- another family at another width, so check a character is in the font before
--- printing it.
-mdw.gameConfig.fontFamily = "Fira Code"
+-- so "->" stays two characters) and the full box-drawing range the tinymap
+-- needs. It is a SUBSET though - any glyph outside it, like U+2228, is
+-- silently drawn from another family at another width, so check a character
+-- is in the font before printing it.
+--
+-- Renamed from plain "Fira Code" because Mudlet registers a package font
+-- with QFontDatabase::addApplicationFont, which does not disambiguate two
+-- families of the same name: a player with stock Fira Code installed would
+-- get one or the other, unpredictably, ligatures and all. The web client
+-- keeps the plain name - there @font-face binds the name to a downloaded
+-- file, so no system font can shadow it. Re-syncing the font from the web
+-- side means re-applying this rename.
+mdw.gameConfig.fontFamily = "Fira Code Willowdale"
 -- The server drives the prompt bar through GMCP (Char.Vitals.prompt/prompt2
 -- arrive as real ANSI), so MDW's line-capture trigger must stay out of the way.
 mdw.gameConfig.usePromptTrigger = false
