@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.5 - 2026-08-21
+
 ### Changed
 - When an update cannot install, the message now says so in red and the link
   reads "Click here to manually install the update", so a failure is not lost
