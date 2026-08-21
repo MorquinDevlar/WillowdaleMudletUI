@@ -119,7 +119,9 @@ local echoedBefore = #H.main._echoed
 mdwui.buildUI()
 local refused = false
 for i = echoedBefore + 1, #H.main._echoed do
-  if H.main._echoed[i]:find("needs MDW 0.4.0", 1, true) then refused = true end
+  -- Read from the constant, not typed: the pin moves whenever a newer MDW API
+    -- is adopted, and a hardcoded number here would fail the release that did it.
+    if H.main._echoed[i]:find("needs MDW " .. mdwui.minMdwVersion, 1, true) then refused = true end
 end
 check(refused, "an old MDW gets one explanatory line on the main console")
 check(mdw.bars["WillowdaleTop"] == barBefore, "the refused build rebuilt no chrome bar")

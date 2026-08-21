@@ -25,13 +25,20 @@ mdwui.packageName = "WillowdaleMudletUI"
 -- script-load time so any other script can read it at runtime with a guarded
 -- lookup. Bump together with mfile - the smoke suite enforces the match.
 mdwui.version = "0.1.0"
--- Hard requirement, not a preference: this package is built on MDW 0.4 APIs
--- (createBar, setPromptGauges/setPromptBarMenu, setWidgetRows/setWidgetMenu,
--- showContextMenu, findWidget and the scripted-control functions,
--- gameSettings, gamePackages ownership reaping). buildUI gates ONCE on this
--- minimum instead of guarding every call. mdw.version exists from MDW 0.3.0
--- on, so nil means an older MDW still. Bump when we adopt a newer MDW API.
-mdwui.minMdwVersion = "0.4.0"
+-- Hard requirement, not a preference: this package is built on the MDW 0.4
+-- APIs (createBar, setPromptGauges/setPromptBarMenu, setWidgetRows/
+-- setWidgetMenu, showContextMenu, findWidget and the scripted-control
+-- functions, gameSettings, gamePackages ownership reaping) plus MDW 0.5's
+-- font family (setFontFamily and the applyMainFont seed below). buildUI gates
+-- ONCE on this minimum instead of guarding every call. mdw.version exists
+-- from MDW 0.3.0 on, so nil means an older MDW still. Bump when we adopt a
+-- newer MDW API.
+--
+-- 0.5.0 rather than 0.4.x because the font family is the delivery mechanism
+-- for it: a player sitting on 0.4.1 satisfies a 0.4.0 minimum, so ensureMdw
+-- would leave them there and applyMainFont would never take effect. The
+-- typeface verb itself stays guarded through capability() regardless.
+mdwui.minMdwVersion = "0.5.0"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, MDWUI_Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
@@ -43,10 +50,9 @@ mdwui.minMdwVersion = "0.4.0"
 --
 -- MDW's release tooling keeps the tag format (v<version>) and the asset name
 -- (MDW.mpackage) as a contract, the same shape as our own releaseUrlFormat
--- below. Pinned one patch above the minimum on purpose: 0.4.1 is the oldest
--- PUBLISHED release (0.4.0 was never tagged), and its consumer API is still
--- the 0.4.0 one, so nothing here needs raising with it.
-mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.4.1/MDW.mpackage"
+-- below. Verify a tag exists before pinning it: an unpublished version here
+-- makes every bootstrap download a GitHub error page instead of a package.
+mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.5.0/MDW.mpackage"
 
 -- Where the self-updater (MDWUI_Update.lua) looks. The feed is the package's
 -- OWN CHANGELOG.md, read raw from the default branch; it carries no URLs, so

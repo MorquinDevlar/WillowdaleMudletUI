@@ -76,10 +76,10 @@ out of the version number alone - so neither may change.
   renders in the same face as the website. It is installed as "Fira Code
   Willowdale", so it cannot collide with a Fira Code you already have, and
   you can pick it in Mudlet's settings for the main window too.
-- **One typeface for the whole session.** With MDW 0.5 or newer the main
-  window is drawn in the same face as the interface, instead of the widgets
-  and the game text disagreeing. `ui font family <name>` switches it, and
-  MDW puts your original font back if you ever remove the UI.
+- **One typeface for the whole session.** The main window is drawn in the
+  same face as the interface, instead of the widgets and the game text
+  disagreeing. `ui font family <name>` switches it, and your original font is
+  put back if you ever remove the UI.
 - **Self-update.** The UI checks GitHub once when it builds and tells you
   what a newer release changed, straight from this changelog. Nothing is
   downloaded until you say so: click the offer's link or type `ui update
@@ -91,7 +91,8 @@ out of the version number alone - so neither may change.
   A newer MDW than the UI needs is never touched, the download is checked
   before the MDW you are running is replaced, and if it cannot be fetched you
   are told where to get it by hand.
-- Install order with MDW does not matter, in either direction, and the UI
+- Requires MDW 0.5.0 or newer, which the UI installs for you if it is
+  missing - install order with MDW does not matter, in either direction, and the UI
   rebuilds itself when MDW updates. MDW 0.4.0 or newer is required: with an
   older MDW the package declines to build and prints one explanatory line
   instead of half a UI while the version it needs is fetched.

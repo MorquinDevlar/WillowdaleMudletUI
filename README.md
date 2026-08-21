@@ -117,11 +117,13 @@ integration contract (it only seeds tables at load time and MDW invokes it
 whenever its UI builds). Widget arrangement is yours after the first run: MDW
 persists your layout, and the default grouping never overrides it.
 
-**MDW 0.4.0 or newer is required.** The UI is built on MDW 0.4 APIs, so with
-an older MDW installed it declines to build and prints a single
-`needs MDW 0.4.0 or newer` line on the main console instead of a UI. Update
-the MDW package and the interface builds itself on the spot - MDW re-runs
-this package's registration whenever it sets up.
+**MDW 0.5.0 or newer is required, and this package installs it for you.**
+Install the UI on its own and it fetches the MDW release it was built against,
+then builds the interface once MDW lands - Mudlet resolves no package
+dependencies itself. If that download cannot be made (no network, GitHub
+blocked) it declines to build and prints a single `needs MDW 0.5.0 or newer`
+line on the main console with the URL, rather than half a UI. MDW is never
+downgraded: a newer one than the minimum is left alone.
 
 ## Design notes
 
