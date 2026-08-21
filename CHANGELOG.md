@@ -72,8 +72,9 @@ out of the version number alone - so neither may change.
   group, otherwise the end of its old dock - rather than floating it in the
   middle of the screen where there is no drag to put it back with.
 - **The package's own icon**, so it is recognisable in Mudlet's package
-  manager, and the JetBrains Mono NL font the web client uses, bundled so you
-  can select it in Mudlet's settings. Nothing changes your font for you.
+  manager, and Fira Code - the same face the web client and the website use -
+  bundled so the interface renders in it and you can pick it in Mudlet's
+  settings for the main window too.
 - **Self-update.** The UI checks GitHub once when it builds and tells you
   what a newer release changed, straight from this changelog. Nothing is
   downloaded until you say so: click the offer's link or type `ui update

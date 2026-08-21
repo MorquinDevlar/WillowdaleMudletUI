@@ -279,12 +279,15 @@ mdw.gameConfig = mdw.gameConfig or {}
 -- "Uninstall WillowdaleUI", the ready message names it likewise.
 mdw.gameConfig.uiName = "WillowdaleUI"
 -- The face this UI is drawn in, and the reason the package ships
--- JetBrainsMonoNL-Regular.ttf: Mudlet loads a package's fonts on install and
+-- FiraCode-Regular.ttf: Mudlet loads a package's fonts on install and
 -- unloads them on uninstall, so the font is ours to supply and ours to name.
 -- Seeded rather than assumed - MDW's own default is a neutral monospace, and
 -- gameConfig is the seam where a game states its preference (MDW validates it
 -- against getAvailableFonts and falls back on its own if it is missing).
-mdw.gameConfig.fontFamily = "JetBrains Mono NL"
+-- The name is the font's own family string, not the file name - Mudlet
+-- matches on family. Fira Code is what the web client and the website render
+-- in, so a player moving between them sees one face.
+mdw.gameConfig.fontFamily = "Fira Code"
 -- The server drives the prompt bar through GMCP (Char.Vitals.prompt/prompt2
 -- arrive as real ANSI), so MDW's line-capture trigger must stay out of the way.
 mdw.gameConfig.usePromptTrigger = false
