@@ -45,18 +45,21 @@ local MAX_NOTE_LINES = 40
 -- Smaller than any build this package has ever produced, so a 404 page or a
 -- truncated transfer fails the check without a checksum to maintain.
 local MIN_PACKAGE_BYTES = 20000
--- Long enough for Mudlet to unpack and run a package's scripts, short enough
--- that a player is still watching the screen they clicked from. It is a LAST
--- resort now, not part of the swap: installWhenFree below drives the install
--- off Mudlet's own signals, so reaching this means something went wrong that
--- no retry could see.
-local WATCHDOG_SECONDS = 20
--- How the swap waits for Mudlet to let go of a package name. Fine-grained and
--- short on purpose: the first attempt is on the very next tick, so a client
--- that is ready pays nothing at all, and a slow teardown costs only the
--- fraction of a second it actually needs.
+-- How the swap waits for Mudlet to let go of a package name. Fine-grained, so
+-- a client that is ready pays nothing and a slow teardown costs only what it
+-- actually needs - but the WINDOW has to be generous, because the teardown is
+-- not ours to hurry: it destroys thirteen widgets, runs MDW's teardown hook
+-- and can take a profile save with it.
 local INSTALL_POLL_SECONDS = 0.1
-local INSTALL_MAX_TRIES = 50
+local INSTALL_MAX_SECONDS = 15
+local INSTALL_MAX_TRIES = math.floor(INSTALL_MAX_SECONDS / INSTALL_POLL_SECONDS)
+-- The watchdog must speak AFTER the retry has given up, never over the top of
+-- one still running - otherwise a swap that is merely slow is announced as
+-- failed while the attempt that would have succeeded is still in flight. That
+-- was the bug: a five-second retry under a twenty-second watchdog, which is
+-- exactly backwards. It stays a LAST resort, and it now reports what the
+-- retry actually saw rather than only that nothing arrived.
+local WATCHDOG_SECONDS = INSTALL_MAX_SECONDS + 10
 
 --- Named Mudlet colours only (verified against color_table in GUIUtils.lua -
 -- a name missing there prints literally).
@@ -341,6 +344,23 @@ function mdwui.updateWatchdog(path)
   if mdwui.state.updateInstalled then return end
   mdwui.sayBad("The update did not finish installing. The package is saved at:")
   line(string.format("  <%s>%s", P.text, plain(path)))
+  -- WHY it did not, in the terms the swap actually works in. Two theories about
+  -- this failure have already been wrong, so the next one reports rather than
+  -- leaves it to be guessed at from a timestamp.
+  local why
+  if mdwui.state.installGaveUp then
+    why = string.format("Mudlet still had the old package after %ds - the new one was never offered to it.",
+      INSTALL_MAX_SECONDS)
+  elseif mdwui.state.installAttempted then
+    why = string.format("The install was offered after %s and Mudlet returned %s, but it never reported the package as installed.",
+      (mdwui.state.installHeldTries or 0) > 0
+        and string.format("%.1fs of waiting", (mdwui.state.installHeldTries or 0) * INSTALL_POLL_SECONDS)
+        or "no wait",
+      tostring(mdwui.state.installReturned))
+  else
+    why = "The install was never attempted - the retry did not run at all."
+  end
+  line(string.format("  <%s>%s", P.dim, why))
   if cechoLink then
     -- Spelled out, not "[Install it now]": this line only ever appears when
     -- something went wrong, and the player reading it has just watched an
@@ -377,18 +397,24 @@ local function installWhenFree(path, name, done, tries)
   if getPackages and table.contains(getPackages(), name) then
     -- Still registered - installing now would be refused, and refused
     -- SILENTLY. Come back in a moment rather than waiting out a fixed delay.
+    mdwui.state.installHeldTries = tries
     if tries < INSTALL_MAX_TRIES then
       local id = tempTimer(INSTALL_POLL_SECONDS, function()
         installWhenFree(path, name, done, tries)
       end)
       if id then mdwui.addTimer(id) end
+    else
+      -- Gave up waiting. Recorded rather than announced: the watchdog is the
+      -- one voice for a failed swap, and it reads this.
+      mdwui.state.installGaveUp = true
     end
     return
   end
   -- The name is free, so exactly ONE attempt: from here Mudlet's own events
   -- carry it, and the watchdog covers an install that still does not land.
   -- Retrying past this point is how you install the same package twice.
-  installPackage(path)
+  mdwui.state.installAttempted = true
+  mdwui.state.installReturned = installPackage(path)
 end
 
 --- The package file landed. Verify FIRST: nothing is uninstalled until the

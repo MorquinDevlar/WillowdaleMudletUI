@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- An update that took a few seconds to install was reported as failed while it
+  was still going. The wait is now longer than the message that reports it,
+  and when an update really does fail the message says what went wrong rather
+  than only that it did.
+
 ## 0.1.5 - 2026-08-21
 
 ### Changed
