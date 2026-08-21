@@ -2031,10 +2031,13 @@ check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
 -- returning rather than raising - so the failure was silent and the watchdog
 -- only spoke twenty seconds later. The install now waits for the name to leave
 -- getPackages, and nothing about it is a guess.
+-- The MDW swap follows the same sequence as the package swap and for the same
+-- reason: uninstall, wait, install. Nothing here polls getPackages - a live
+-- client proved the registry clears before the uninstall has finished, so it
+-- is not a signal worth waiting on.
 local mdwVersionForRace = mdw.version
 mdw.version = "0.4.0" -- too old, so the bootstrap actually fetches
 H.packages = { "MDW" }
-H.holdPackage = true  -- Mudlet still holds it: the teardown is not finished
 mdwui.state.mdwFetchedThisSession = nil
 mdwui.state.mdwFile = nil
 mdwui.state.updateBusyAt = nil
@@ -2045,23 +2048,11 @@ local heldPath = H.downloads[#H.downloads].path
 writeFile(heldPath, PACKAGE_BYTES)
 local heldInstalls = #H.installed
 raiseEvent("sysDownloadDone", heldPath)
-H.flushTimers()
 check(#H.installed == heldInstalls,
-  "while Mudlet still holds the name, the install is not attempted at all")
-H.flushTimers()
-check(#H.installed == heldInstalls, "and it keeps waiting rather than failing silently")
--- Mudlet lets go: the very next poll installs, with no fixed delay to sit out.
-H.holdPackage = nil
-H.packages = {}
+  "the MDW install waits rather than running inside Mudlet's download event")
 H.flushTimers()
 check(H.installed[#H.installed] == heldPath and #H.installed == heldInstalls + 1,
-  "the moment the name is released, the install goes in")
-raiseEvent("sysInstallPackage", "MDW")
-check(mdwui.state.mdwFile == nil, "and sysInstallPackage stops the retry - the event is the signal")
-local afterDone = #H.installed
-H.flushTimers()
-H.flushTimers()
-check(#H.installed == afterDone, "a completed install is never attempted twice")
+  "and then installs exactly once, on the timer")
 mdw.version = mdwVersionForRace
 
 -- Mudlet unpacks the new MDW, runs its scripts, then raises sysInstallPackage.

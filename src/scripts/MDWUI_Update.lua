@@ -50,16 +50,25 @@ local MIN_PACKAGE_BYTES = 20000
 -- actually needs - but the WINDOW has to be generous, because the teardown is
 -- not ours to hurry: it destroys thirteen widgets, runs MDW's teardown hook
 -- and can take a profile save with it.
-local INSTALL_POLL_SECONDS = 0.1
-local INSTALL_MAX_SECONDS = 15
-local INSTALL_MAX_TRIES = math.floor(INSTALL_MAX_SECONDS / INSTALL_POLL_SECONDS)
--- The watchdog must speak AFTER the retry has given up, never over the top of
--- one still running - otherwise a swap that is merely slow is announced as
--- failed while the attempt that would have succeeded is still in flight. That
--- was the bug: a five-second retry under a twenty-second watchdog, which is
--- exactly backwards. It stays a LAST resort, and it now reports what the
--- retry actually saw rather than only that nothing arrived.
-local WATCHDOG_SECONDS = INSTALL_MAX_SECONDS + 10
+-- The wait between uninstalling the old package and installing the new one.
+-- One second, because that is what the mapper package and the old UI both do
+-- and both have always worked:
+--   uninstallPackage(name); tempTimer(1, function() installPackage(path) end)
+--
+-- It is not a tick and it is not a poll on getPackages(). A live client
+-- reported "offered after no wait and Mudlet returned true, but it never
+-- reported the package as installed" - the registry drops the name the moment
+-- uninstallPackage returns, so waiting on it installs immediately into an
+-- uninstall that has not finished, and Mudlet accepts the call and does
+-- nothing. There is no signal to wait for here; there is a working sequence,
+-- and this is it.
+local INSTALL_WAIT_SECONDS = 1
+-- Long enough for Mudlet to unpack a package and run its scripts, short enough
+-- that a player is still watching the screen they clicked from - and always
+-- comfortably past INSTALL_WAIT_SECONDS, so it can never announce a failure
+-- over the top of an install that has not been attempted yet. A LAST resort:
+-- it says what Mudlet reported rather than only that nothing arrived.
+local WATCHDOG_SECONDS = 20
 
 --- Named Mudlet colours only (verified against color_table in GUIUtils.lua -
 -- a name missing there prints literally).
@@ -348,17 +357,11 @@ function mdwui.updateWatchdog(path)
   -- this failure have already been wrong, so the next one reports rather than
   -- leaves it to be guessed at from a timestamp.
   local why
-  if mdwui.state.installGaveUp then
-    why = string.format("Mudlet still had the old package after %ds - the new one was never offered to it.",
-      INSTALL_MAX_SECONDS)
-  elseif mdwui.state.installAttempted then
-    why = string.format("The install was offered after %s and Mudlet returned %s, but it never reported the package as installed.",
-      (mdwui.state.installHeldTries or 0) > 0
-        and string.format("%.1fs of waiting", (mdwui.state.installHeldTries or 0) * INSTALL_POLL_SECONDS)
-        or "no wait",
+  if mdwui.state.installAttempted then
+    why = string.format("Mudlet returned %s from the install and then never reported the package installed.",
       tostring(mdwui.state.installReturned))
   else
-    why = "The install was never attempted - the retry did not run at all."
+    why = "The install never ran - the timer that carries it did not fire."
   end
   line(string.format("  <%s>%s", P.dim, why))
   if cechoLink then
@@ -369,52 +372,6 @@ function mdwui.updateWatchdog(path)
       function() installPackage(path) end, "Install " .. plain(path), true)
     line("")
   end
-end
-
---- Install `path` the moment Mudlet has really let go of `name`.
---
--- WHY this is not one deferred call. installPackage REFUSES while Mudlet still
--- holds the package name - the same rule the MDW bootstrap already relies on -
--- and it reports that refusal by returning, not by raising anything. Meanwhile
--- uninstallPackage's teardown (our cleanup, MDW's teardown hook, thirteen
--- widgets and a layout save) is not reliably finished one tick later. A single
--- tempTimer(0) therefore loses the race silently and the player is left with
--- no UI and a watchdog message twenty seconds later.
---
--- A flat delay - the old UI waited a whole second - only guesses in both
--- directions: too short and the install is refused just as silently, too long
--- and every update pays for the worst case. So this waits on the STATE Mudlet
--- reports (the name leaving getPackages) and stops on the EVENT Mudlet raises
--- (sysInstallPackage, via the `done` predicate), which is the only real
--- confirmation that a package is in. Between them there is nothing to guess.
---
--- @param done  predicate that is true once the install has been observed
-local function installWhenFree(path, name, done, tries)
-  tries = (tries or 0) + 1
-  -- Already in: the event beat us here, or a player installed it by hand from
-  -- the watchdog's link. Retrying would install a second time on top.
-  if done and done() then return end
-  if getPackages and table.contains(getPackages(), name) then
-    -- Still registered - installing now would be refused, and refused
-    -- SILENTLY. Come back in a moment rather than waiting out a fixed delay.
-    mdwui.state.installHeldTries = tries
-    if tries < INSTALL_MAX_TRIES then
-      local id = tempTimer(INSTALL_POLL_SECONDS, function()
-        installWhenFree(path, name, done, tries)
-      end)
-      if id then mdwui.addTimer(id) end
-    else
-      -- Gave up waiting. Recorded rather than announced: the watchdog is the
-      -- one voice for a failed swap, and it reads this.
-      mdwui.state.installGaveUp = true
-    end
-    return
-  end
-  -- The name is free, so exactly ONE attempt: from here Mudlet's own events
-  -- carry it, and the watchdog covers an install that still does not land.
-  -- Retrying past this point is how you install the same package twice.
-  mdwui.state.installAttempted = true
-  mdwui.state.installReturned = installPackage(path)
 end
 
 --- The package file landed. Verify FIRST: nothing is uninstalled until the
@@ -461,14 +418,13 @@ local function installDownloaded(path)
   -- timers and deletes our handlers. Both timers below are therefore created
   -- after it, or killAllTimers would take the install with it.
   uninstallPackage(mdwui.packageName)
-  -- First attempt on the next tick - Mudlet's installer must not be re-entered
-  -- from inside its own event - and then as fast as Mudlet allows. The swap is
-  -- closed by sysInstallPackage setting updateInstalled, which is also what
-  -- tells the retry to stop and what silences the watchdog below.
-  local installId = tempTimer(0, function()
-    installWhenFree(path, mdwui.packageName, function()
-      return mdwui.state.updateInstalled == true
-    end)
+  -- tempTimer(1) is the ordinary Mudlet idiom for letting the client settle
+  -- before the next command, and it is what both the mapper package and the
+  -- old UI use for exactly this swap. The swap is closed by sysInstallPackage
+  -- setting updateInstalled, which is what silences the watchdog below.
+  local installId = tempTimer(INSTALL_WAIT_SECONDS, function()
+    mdwui.state.installAttempted = true
+    mdwui.state.installReturned = installPackage(path)
   end)
   if installId then mdwui.addTimer(installId) end
   local watchId = tempTimer(WATCHDOG_SECONDS, function() mdwui.updateWatchdog(path) end)
@@ -618,9 +574,7 @@ local function installMdw(path)
   -- the whole UI down, so an install refused for a name Mudlet has not released
   -- yet leaves the player with nothing. onInstallPackage clears mdwFile when
   -- MDW reports in, which is this retry's stop signal.
-  local installId = tempTimer(0, function()
-    installWhenFree(path, "MDW", mdwui.mdwSatisfied)
-  end)
+  local installId = tempTimer(INSTALL_WAIT_SECONDS, function() installPackage(path) end)
   if installId then mdwui.addTimer(installId) end
   -- Nothing to activate afterwards: MDW's install runs setup -> onReady ->
   -- buildUI, and this package only ever seeded mdw.onReady, so the UI builds

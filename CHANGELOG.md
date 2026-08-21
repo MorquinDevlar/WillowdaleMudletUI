@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- Updating installs again. The new package was being handed to Mudlet before
+  the old one had finished being removed, which Mudlet accepted and then
+  quietly ignored, so every update ended at "the update did not finish
+  installing" until it was installed by hand.
+
 ## 0.1.7 - 2026-08-22
 
 ### Fixed
