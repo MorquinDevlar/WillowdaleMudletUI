@@ -23,6 +23,9 @@ out of the version number alone - so neither may change.
 ## Unreleased
 
 ### Changed
+- When an update cannot install, the message now says so in red and the link
+  reads "Click here to manually install the update", so a failure is not lost
+  among ordinary output.
 - The Equipment, Inventory and Forage group opens taller again, so a full
   equipment loadout is visible without dragging. First-run layout only - if you
   already have a layout saved, `ui reset confirm` is what puts the new

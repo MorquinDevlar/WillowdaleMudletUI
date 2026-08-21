@@ -1681,7 +1681,15 @@ local watch = table.concat(H.main._echoed)
 check(watch:find("did not finish installing", 1, true) ~= nil
   and watch:find(swapPath, 1, true) ~= nil,
   "the watchdog hands the saved package back when no install event arrives")
-check(uiLink("[Install it now]") ~= nil, "with a one-click install of that file")
+-- A failure that is painted like every other line is a failure a player
+-- scrolls past, and the link has to say what clicking it does - this text only
+-- ever appears after an update visibly did not happen.
+check(watch:find("firebrick", 1, true) ~= nil,
+  "and it is painted as a failure, not as ordinary output")
+check(watch:find("[Click here to manually install the update]", 1, true) ~= nil,
+  "with a link that spells out what it will do")
+check(uiLink("[Click here to manually install the update]") ~= nil,
+  "and the link really is clickable, not just text")
 
 -- Now the other half: Mudlet runs the new package's scripts, then raises
 -- sysInstallPackage. mdwui.state survives in the Lua state, which is how the

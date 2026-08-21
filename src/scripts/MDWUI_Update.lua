@@ -339,10 +339,13 @@ end
 -- disk, so hand it over with a click rather than leave a player with no UI.
 function mdwui.updateWatchdog(path)
   if mdwui.state.updateInstalled then return end
-  mdwui.say("The update did not finish installing. The package is saved at:")
+  mdwui.sayBad("The update did not finish installing. The package is saved at:")
   line(string.format("  <%s>%s", P.text, plain(path)))
   if cechoLink then
-    cechoLink(string.format("<%s>[Install it now]", P.link),
+    -- Spelled out, not "[Install it now]": this line only ever appears when
+    -- something went wrong, and the player reading it has just watched an
+    -- update not happen. It should say what clicking will do.
+    cechoLink(string.format("<%s>[Click here to manually install the update]", P.link),
       function() installPackage(path) end, "Install " .. plain(path), true)
     line("")
   end
@@ -394,7 +397,7 @@ end
 local function installDownloaded(path)
   local ok, why = verified(path)
   if not ok then
-    mdwui.say(string.format("Update failed - %s. Nothing was changed.", why))
+    mdwui.sayBad(string.format("Update failed - %s. Nothing was changed.", why))
     line(string.format("  <%s>%s", P.dim, plain(mdwui.state.updateUrl or "")))
     os.remove(path)
     mdwui.state.updateFile = nil
@@ -411,7 +414,7 @@ local function installDownloaded(path)
     local blob = readFile(path, "rb")
     local fh = blob and io.open(modulePath, "wb")
     if not fh then
-      mdwui.say(string.format("Update failed - could not write %s. Nothing was changed.",
+      mdwui.sayBad(string.format("Update failed - could not write %s. Nothing was changed.",
         plain(modulePath)))
       line(string.format("  <%s>the download is saved at %s", P.dim, plain(path)))
       return
@@ -554,7 +557,7 @@ end
 local function installMdw(path)
   local ok, why = verified(path)
   if not ok then
-    mdwui.say(string.format("MDW download failed - %s. Nothing was changed.", why))
+    mdwui.sayBad(string.format("MDW download failed - %s. Nothing was changed.", why))
     sayManualMdw()
     os.remove(path)
     mdwui.state.mdwFile = nil
@@ -616,7 +619,7 @@ function mdwui.onDownloadError(_, errorMessage, savedPath)
     -- would not change that.
     mdwui.state.updateBusyAt = nil
     mdwui.state.mdwFile = nil
-    mdwui.say(string.format("MDW download failed: %s",
+    mdwui.sayBad(string.format("MDW download failed: %s",
       plain(errorMessage or "unknown error")))
     sayManualMdw()
     return

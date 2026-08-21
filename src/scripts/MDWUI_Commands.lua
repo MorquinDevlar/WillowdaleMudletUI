@@ -83,6 +83,17 @@ function mdwui.say(text)
   cecho(string.format("<%s>[ui] <%s>%s\n", P.tag, P.text, tostring(text)))
 end
 
+--- The same line, painted as a FAILURE. Not a second marker - the [ui] tag
+-- stays, so a player scanning back still looks for one thing - but the body
+-- takes the palette's red, because a failure that is styled like every other
+-- line is a failure a player scrolls straight past. Reserved for "this did not
+-- work": a refused update, a download that never landed, a framework we could
+-- not fetch. Not for ordinary negatives like a toggle being off.
+function mdwui.sayBad(text)
+  if not cecho then return end
+  cecho(string.format("<%s>[ui] <%s>%s\n", P.tag, P.bad, tostring(text)))
+end
+
 --- A block line without the tag: listings, tables, the overview.
 local function line(text)
   if cecho then cecho(tostring(text) .. "\n") end
