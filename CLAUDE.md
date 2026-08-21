@@ -37,7 +37,9 @@ existing widgets, and re-running must not duplicate anything.
 MDW >= `mdwui.minMdwVersion` (0.4.0) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
-MDW 0.4 call site. Bump the constant when adopting a newer MDW API. The `ui`
+MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
+it `mdwui.mdwUrl`, since the package installs MDW itself when it is missing or
+too old (see "Bootstrapping MDW"). The `ui`
 command dispatcher keeps its per-capability guards regardless: the alias is
 installed even when the build was refused under an old MDW.
 
@@ -196,6 +198,56 @@ plausible size), then uninstall and install; defer `installPackage` by one tick
 so Mudlet's installer is not re-entered from inside its own event; and arm a
 watchdog that prints a manual-install link if the swap has not completed by the
 time it fires.
+
+## Bootstrapping MDW
+
+Mudlet resolves NO package dependencies - the mfile's `dependencies` field is
+read by the package exporter and by nothing else - so a player who installs
+only this package would meet `buildUI`'s version gate and one line of
+explanation instead of a UI. `mdwui.ensureMdw()` (bottom of
+`MDWUI_Update.lua`, reusing the updater's `verified()`, its download-path
+dispatch and its in-flight guard) therefore installs MDW itself.
+
+The pin lives in TWO constants in `MDWUI_Config.lua` and they move TOGETHER:
+`mdwui.minMdwVersion` (what the code needs) and `mdwui.mdwUrl` (where to get
+it). Adopting a newer MDW API means raising both in one edit; never pin
+"latest". MDW never updates itself, by design - a framework swap is only safe
+when the thing built on it says so - so this package is the only thing that
+ever moves its framework, and it moves it in ONE direction: a player running
+an MDW newer than the minimum is left alone.
+
+The rules that keep a bootstrap from costing a player the UI they already
+have:
+
+- Download, verify, THEN uninstall. `uninstallPackage("MDW")` takes the whole
+  UI down with it, so a GitHub error page must never get that far - same
+  order, same `verified()`, as the self-update.
+- Uninstall only when `table.contains(getPackages(), "MDW")`: absent is the
+  ordinary case, and Mudlet just refuses to install over a name it holds.
+- An MDW installed as a MODULE is refused outright, with the manual URL:
+  `getPackages()` does not list modules, so the check above would read
+  "absent" and leave a package named MDW beside the module - two copies of
+  the `mdw` singleton over one UI, which is the very thing keeping MDW and
+  this package separate packages is meant to prevent. A module is a
+  deliberate choice by the player and stays theirs to update.
+- The install `tempTimer` is created AFTER `uninstallPackage`, because MDW's
+  teardown runs our own `mdw.onTeardown` hook and `killAllTimers` would take
+  the pending install with it. Same rule as the package swap, one step more
+  lethal.
+- One attempt per session (`mdwui.state.mdwFetchedThisSession`), and every
+  failure path prints `mdwui.mdwUrl` so a player behind a proxy can finish by
+  hand.
+- Nothing "activates" the UI afterwards: MDW's install runs setup -> onReady
+  -> buildUI and this package only ever seeded `mdw.onReady`, so the UI builds
+  itself. Do not add an activation call.
+
+Triggers are events, NEVER script load: our own `sysInstallPackage` (deferred
+a tick - Mudlet's installer must not be re-entered from inside its own event)
+and `sysLoadEvent`. Calling `ensureMdw` at load time would read an
+`mdw.version` that arrives a moment later and throw away the load-order
+freedom the MDW contract guarantees. `buildUI`'s gate stays exactly where it
+is: it is what protects the session when the bootstrap cannot run, and its
+message keeps the manual URL for that case.
 
 ## Style
 

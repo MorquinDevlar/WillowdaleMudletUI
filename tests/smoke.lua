@@ -1789,6 +1789,135 @@ for _ = 1, 2 do
 end
 check(liveTimerCount() == 1, "script re-runs replace the affects ticker instead of stacking")
 
+-- 12d. Bootstrapping MDW (MDWUI_Update.lua). Mudlet resolves no package
+-- dependencies - the mfile's "dependencies" field never leaves the exporter -
+-- so this package installs the framework it hard-requires. Driven like 10c:
+-- the stub records downloads instead of performing them, and the suite writes
+-- the file Mudlet would have written and raises the event it would have
+-- raised. mdw.version is faked here and comes back for real at the end of the
+-- section, when the "new" MDW's scripts load.
+H.packages = { "MDW" } -- what getPackages() reports in a profile that has it
+local bootDownloads, bootUninstalls = #H.downloads, #H.uninstalled
+
+mdwui.ensureMdw()
+check(#H.downloads == bootDownloads, "an MDW that already satisfies the minimum is not fetched at all")
+
+mdw.version = "9.9.9"
+mdwui.ensureMdw()
+check(#H.downloads == bootDownloads and #H.uninstalled == bootUninstalls,
+  "an MDW NEWER than the minimum is left untouched - the pin is a floor, never a downgrade")
+
+-- MDW installed as a MODULE is not ours to swap: getPackages() does not list
+-- modules, so the bootstrap would read "absent" and leave a package named MDW
+-- beside the module - two copies of the singleton over one UI.
+mdw.version = "0.3.0"
+H.modulePaths["MDW"] = H.homeDir .. "/MDW.mpackage"
+H.main._echoed = {}
+check(mdwui.ensureMdw() == false and #H.downloads == bootDownloads,
+  "an MDW installed as a module is left alone, never swapped")
+check(table.concat(H.main._echoed):find("as a module", 1, true) ~= nil
+  and table.concat(H.main._echoed):find(mdwui.mdwUrl, 1, true) ~= nil,
+  "and the player is told, with the URL to update it by hand")
+H.modulePaths["MDW"] = nil
+-- That attempt spent the session's one try; the checks below are about the
+-- ordinary package case.
+mdwui.state.mdwFetchedThisSession = nil
+
+-- Too old. The gate is what a player with no network is left holding, so it
+-- keeps the manual instruction even while the download is under way.
+mdw.version = "0.3.0"
+H.main._echoed = {}
+mdwui.buildUI()
+check(table.concat(H.main._echoed):find("0.3.0", 1, true) ~= nil
+  and table.concat(H.main._echoed):find("fetching", 1, true) ~= nil
+  and table.concat(H.main._echoed):find(mdwui.mdwUrl, 1, true) ~= nil,
+  "buildUI's gate names the MDW installed, says it is being fetched, and still gives the URL")
+check(mdw.widgets["Combat"] ~= nil, "and the refused build left the running session untouched")
+
+H.main._echoed = {}
+raiseEvent("sysLoadEvent")
+check(#H.downloads == bootDownloads + 1 and H.downloads[#H.downloads].url == mdwui.mdwUrl,
+  "a profile load with MDW too old downloads the pinned MDW release")
+check(table.concat(H.main._echoed):find("fetching it now", 1, true) ~= nil, "saying so in one line")
+raiseEvent("sysLoadEvent")
+check(#H.downloads == bootDownloads + 1, "and only once a session, however often a trigger fires")
+
+-- A GitHub error page must never cost a player the MDW they are running:
+-- verification comes before anything is uninstalled here too.
+local mdwPath = H.downloads[#H.downloads].path
+writeFile(mdwPath, "<!DOCTYPE html>" .. string.rep("x", 30000))
+H.main._echoed = {}
+raiseEvent("sysDownloadDone", mdwPath)
+check(table.concat(H.main._echoed):find("not a Mudlet package", 1, true) ~= nil
+  and table.concat(H.main._echoed):find(mdwui.mdwUrl, 1, true) ~= nil,
+  "a bad MDW download is refused, with the URL to install by hand")
+check(#H.uninstalled == bootUninstalls, "and the MDW that is running is NOT uninstalled")
+check(io.exists(mdwPath) == false, "the bad file is removed")
+
+-- The other failure mode: nothing arrives at all.
+mdwui.state.mdwFetchedThisSession = nil
+mdwui.ensureMdw()
+H.main._echoed = {}
+raiseEvent("sysDownloadError", "host not found", H.downloads[#H.downloads].path)
+check(table.concat(H.main._echoed):find("host not found", 1, true) ~= nil
+  and table.concat(H.main._echoed):find(mdwui.mdwUrl, 1, true) ~= nil,
+  "a download error names the failure and hands the URL over")
+check(mdwui.state.updateBusyAt == nil and mdwui.state.mdwFile == nil,
+  "and clears the in-flight guard the updater shares")
+
+-- The ordinary case: this package installed on its own, MDW nowhere in the
+-- profile - which is also the second trigger, since our own install is the
+-- first moment the package can find that out.
+H.packages = {}
+mdwui.state.mdwFetchedThisSession = nil
+local bootInstalls = #H.downloads
+raiseEvent("sysInstallPackage", mdwui.packageName)
+check(#H.downloads == bootInstalls,
+  "our own install defers the bootstrap a tick rather than re-entering Mudlet's installer")
+H.flushTimers()
+check(#H.downloads == bootInstalls + 1 and H.downloads[#H.downloads].url == mdwui.mdwUrl,
+  "and then fetches MDW, which the profile has none of")
+mdwPath = H.downloads[#H.downloads].path
+writeFile(mdwPath, PACKAGE_BYTES)
+raiseEvent("sysDownloadDone", mdwPath)
+check(#H.uninstalled == bootUninstalls, "MDW absent: nothing is uninstalled on the way in")
+bootInstalls = #H.installed
+H.flushTimers()
+check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
+  "and the install runs a tick later, never inside Mudlet's own download event")
+
+-- An MDW that is merely too old: uninstall FIRST (Mudlet refuses to install
+-- over a name it holds), and only once the replacement is proven on disk.
+H.packages = { "MDW" }
+mdwui.state.mdwFetchedThisSession = nil
+mdwui.ensureMdw()
+mdwPath = H.downloads[#H.downloads].path
+writeFile(mdwPath, PACKAGE_BYTES)
+bootInstalls = #H.installed
+raiseEvent("sysDownloadDone", mdwPath)
+check(H.uninstalled[#H.uninstalled] == "MDW" and #H.uninstalled == bootUninstalls + 1,
+  "a verified download uninstalls the old MDW - only now, with the replacement on disk")
+check(#H.installed == bootInstalls, "the install still waits a tick")
+check(mdw.isSetUp == false, "MDW's teardown ran inside that uninstall (our onTeardown hook with it)")
+H.flushTimers()
+check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
+  "the install timer, created AFTER the uninstall, survived the teardown that killed our timers")
+
+-- Mudlet unpacks the new MDW, runs its scripts, then raises sysInstallPackage.
+-- Nothing in this package activates anything: MDW's install runs setup ->
+-- onReady -> buildUI, and our onReady seed was there the whole time.
+for _, name in ipairs(MDW_ORDER) do
+  assert(pcall(dofile, MDW_SRC .. name .. ".lua"), "failed loading " .. name)
+end
+raiseEvent("sysInstallPackage", "MDW")
+H.flushTimers()
+H.flushTimers()
+check(mdwui.mdwSatisfied(), "the installed MDW's own scripts carry a satisfying version again")
+check(mdw.isSetUp and mdw.widgets["Combat"] ~= nil
+  and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
+  "the UI built itself from its seeds when MDW landed, with nothing to activate")
+check(io.exists(mdwPath) == false, "and the downloaded MDW package is cleaned up once it lands")
+
 -- 13. Uninstalling this package removes everything ours, leaves MDW running.
 -- The event carries the mfile package name - packageName must match it.
 -- An open context menu holds closures into this package, so it must go too.

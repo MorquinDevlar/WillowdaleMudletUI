@@ -30,6 +30,11 @@ read_globals = {
   "downloadFile",
   "installPackage",
   "uninstallPackage",
+  -- The MDW bootstrap asks whether MDW is installed before uninstalling it
+  -- (getPackages is Mudlet 4.12+, hence the guard at the call site).
+  "getPackages",
+  -- Mudlet's TableUtils.lua extends the stdlib table with contains().
+  table = { fields = { "contains" } },
   "getModulePath",
   "reloadModule",
   -- Native key folder toggle (numpad walking ships in src/keys); read guarded.

@@ -32,6 +32,21 @@ mdwui.version = "0.1.0"
 -- minimum instead of guarding every call. mdw.version exists from MDW 0.3.0
 -- on, so nil means an older MDW still. Bump when we adopt a newer MDW API.
 mdwui.minMdwVersion = "0.4.0"
+-- The MDW release this package installs when MDW is missing or too old
+-- (mdwui.ensureMdw, MDWUI_Update.lua). Mudlet has NO package dependency
+-- resolution - the mfile "dependencies" field is read by the package exporter
+-- and by nothing else - so the pin above is only half a requirement without a
+-- place to get it from. THE TWO MOVE TOGETHER: adopting a newer MDW API means
+-- raising the minimum and this URL in the same edit, and never pinning
+-- "latest" - MDW never updates itself, by design, so this package is the only
+-- thing that ever moves its framework.
+--
+-- MDW's release tooling keeps the tag format (v<version>) and the asset name
+-- (MDW.mpackage) as a contract, the same shape as our own releaseUrlFormat
+-- below. Pinned one patch above the minimum on purpose: 0.4.1 is the oldest
+-- PUBLISHED release (0.4.0 was never tagged), and its consumer API is still
+-- the 0.4.0 one, so nothing here needs raising with it.
+mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.4.1/MDW.mpackage"
 
 -- Where the self-updater (MDWUI_Update.lua) looks. The feed is the package's
 -- OWN CHANGELOG.md, read raw from the default branch; it carries no URLs, so
@@ -243,6 +258,10 @@ mdwui.state = mdwui.state or {
   -- check does not), updateCheckedThisSession, and updateInstalled - the
   -- all-clear the watchdog reads, which only works because this table
   -- survives the package swap in the Lua state.
+  -- MDW bootstrap keys (MDWUI_Update, runtime): mdwFile (the download in
+  -- flight, matched against sysDownloadDone's path) and mdwFetchedThisSession
+  -- - one attempt per session, so a dead network cannot turn into a retry
+  -- loop across profile loads and installs.
 }
 
 ---------------------------------------------------------------------------

@@ -1,7 +1,9 @@
 --[[
   MDWUI_Update.lua
   The package's self-update: read our own CHANGELOG.md from GitHub, say when
-  a newer release exists, and swap the package on the player's word.
+  a newer release exists, and swap the package on the player's word. And, at
+  the bottom, the same machinery pointed at MDW: the bootstrap that installs
+  the framework this package cannot run without.
 
   The feed IS the changelog. There is no releases.json and no manifest: the
   file the repo already keeps (Keep a Changelog, newest release first) is the
@@ -28,9 +30,9 @@
   through plain() before it is echoed - "<b>" in a bullet must print, not
   paint.
 
-  Dependencies: MDWUI_Config.lua (the release constants), MDWUI_Core.lua
-  (versionAtLeast, addTimer). Its event handlers are registered with the rest
-  of the package's in MDWUI_Init.lua.
+  Dependencies: MDWUI_Config.lua (the release constants and the MDW pin),
+  MDWUI_Core.lua (versionAtLeast, mdwSatisfied, addTimer). Its event handlers
+  are registered with the rest of the package's in MDWUI_Init.lua.
 ]]
 
 -- A stalled download must not wedge the checker for the rest of the session,
@@ -378,12 +380,109 @@ local function installDownloaded(path)
 end
 
 ---------------------------------------------------------------------------
+-- BOOTSTRAPPING MDW
+--
+-- Mudlet resolves no dependencies: the mfile's "dependencies" field is read
+-- by the package exporter and by nothing else. A player who installs this
+-- package alone would therefore meet buildUI's version gate and one line of
+-- explanation instead of a UI, so the package installs its own framework.
+--
+-- MDW never updates itself, by design - a framework swap is only safe when
+-- the thing built on it says so - which makes the pin ours to hold and ours
+-- to move: mdwui.minMdwVersion and mdwui.mdwUrl travel together.
+---------------------------------------------------------------------------
+
+--- Printed on every failure path: a player behind a proxy that eats GitHub
+-- can still finish the job by hand.
+local function sayManualMdw()
+  line(string.format("  <%s>Install MDW by hand from: %s", P.dim, plain(mdwui.mdwUrl)))
+end
+
+--- Install MDW when it is missing or older than this package needs. NEVER
+-- downgrades - a player on a newer MDW than our minimum is left alone - which
+-- is what makes this safe to call from any trigger, as often as one fires.
+function mdwui.ensureMdw()
+  if mdwui.mdwSatisfied() then return false end
+  -- One attempt per session: the triggers (profile load, our own install)
+  -- fire more than once, and a repeat would only reprint a failure the player
+  -- has already read.
+  if mdwui.state.mdwFetchedThisSession then return false end
+  -- The updater and the bootstrap share one downloader guard so neither can
+  -- land on the other's file. The overlap is nearly impossible in practice -
+  -- the update check starts from buildUI, which the version gate turns back
+  -- long before that - but the two do write to the same profile directory.
+  if busy() then return false end
+  -- Set before the downloader check, not after it: a Mudlet with no
+  -- downloadFile will not grow one mid-session, so that line is worth saying
+  -- exactly as often as the fetch itself - once.
+  mdwui.state.mdwFetchedThisSession = true
+  -- MDW installed as a MODULE is not ours to swap. getPackages() does not
+  -- list modules, so the check below would read "absent" and installPackage
+  -- would leave a package named MDW beside the module - two copies of the
+  -- mdw singleton fighting over one UI, which is the whole reason MDW and
+  -- this package stay separate in the first place. A module is a deliberate
+  -- choice, so it stays the player's to update.
+  if getModulePath and getModulePath("MDW") then
+    mdwui.say(string.format("%s needs MDW %s or newer, and MDW is installed here as a module.",
+      mdwui.packageName, mdwui.minMdwVersion))
+    sayManualMdw()
+    return false
+  end
+  if not downloadFile then
+    mdwui.say(string.format("%s needs MDW %s, and this Mudlet cannot download it.",
+      mdwui.packageName, mdwui.minMdwVersion))
+    sayManualMdw()
+    return false
+  end
+  mdwui.state.mdwFile = homeDir() .. "/MDW.mpackage"
+  mdwui.state.updateBusyAt = os.time()
+  mdwui.say(string.format("%s needs the MDW framework (%s or newer) - fetching it now...",
+    mdwui.packageName, mdwui.minMdwVersion))
+  downloadFile(mdwui.state.mdwFile, mdwui.mdwUrl)
+  return true
+end
+
+--- The MDW package landed. Verified FIRST, like the self-update above and for
+-- a sharper reason: uninstalling MDW takes the whole UI down with it, so a
+-- GitHub error page must never cost a player the MDW they are already
+-- running.
+local function installMdw(path)
+  local ok, why = verified(path)
+  if not ok then
+    mdwui.say(string.format("MDW download failed - %s. Nothing was changed.", why))
+    sayManualMdw()
+    os.remove(path)
+    mdwui.state.mdwFile = nil
+    return
+  end
+  mdwui.say("Installing MDW - the UI builds itself when it lands.")
+  -- Absent is the ordinary case (this package installed on its own); present
+  -- means it is merely too old, and Mudlet refuses to install over a package
+  -- name it already holds. getPackages is Mudlet 4.12+.
+  if getPackages and table.contains(getPackages(), "MDW") then
+    -- MDW's uninstall saves the layout and tears its UI down, which runs our
+    -- own mdw.onTeardown hook - and that calls killAllTimers. Every timer
+    -- below is created AFTER this call, or the install would be killed on its
+    -- way out; same rule, same reason, as the package swap above.
+    uninstallPackage("MDW")
+  end
+  -- Mudlet's installer must not be re-entered from inside its own event (this
+  -- runs from sysDownloadDone), so the install waits one tick.
+  local installId = tempTimer(0, function() installPackage(path) end)
+  if installId then mdwui.addTimer(installId) end
+  -- Nothing to activate afterwards: MDW's install runs setup -> onReady ->
+  -- buildUI, and this package only ever seeded mdw.onReady, so the UI builds
+  -- itself. The downloaded file is dropped when MDW reports in on
+  -- sysInstallPackage.
+end
+
+---------------------------------------------------------------------------
 -- EVENTS (registered with the rest of the package's in MDWUI_Init.lua)
 ---------------------------------------------------------------------------
 
 --- sysDownloadDone(event, savedPath). Every download in the profile raises
--- it - the mapper's, MDW's - so both branches are keyed on the exact path we
--- asked for.
+-- it - the mapper's, MDW's - so all three branches are keyed on the exact
+-- path we asked for.
 function mdwui.onDownloadDone(_, savedPath)
   local path = tostring(savedPath or "")
   if path == mdwui.state.updateFeedPath then
@@ -392,6 +491,9 @@ function mdwui.onDownloadDone(_, savedPath)
   elseif path == mdwui.state.updateFile then
     mdwui.state.updateBusyAt = nil
     installDownloaded(path)
+  elseif path == mdwui.state.mdwFile then
+    mdwui.state.updateBusyAt = nil
+    installMdw(path)
   end
 end
 
@@ -399,6 +501,17 @@ end
 -- the failure: a player behind a proxy can still fetch the file by hand.
 function mdwui.onDownloadError(_, errorMessage, savedPath)
   local path = tostring(savedPath or "")
+  if path == mdwui.state.mdwFile then
+    -- The in-flight state goes, the once-per-session flag stays: this player
+    -- has no network for GitHub, and saying so again at the next profile load
+    -- would not change that.
+    mdwui.state.updateBusyAt = nil
+    mdwui.state.mdwFile = nil
+    mdwui.say(string.format("MDW download failed: %s",
+      plain(errorMessage or "unknown error")))
+    sayManualMdw()
+    return
+  end
   local isFeed = (path == mdwui.state.updateFeedPath)
   if not (isFeed or path == mdwui.state.updateFile) then return end
   mdwui.state.updateBusyAt = nil
@@ -414,6 +527,17 @@ end
 -- NEW copy of the package; mdwui.state survives in the Lua state, which is
 -- how the watchdog created by the old one learns it can stay quiet.
 function mdwui.onInstallPackage(_, package)
+  -- The bootstrap's far side. MDW has already run setup -> onReady ->
+  -- buildUI by the time this arrives, so there is nothing to do but release
+  -- the guard and drop the file.
+  if package == "MDW" then
+    mdwui.state.updateBusyAt = nil
+    if mdwui.state.mdwFile then
+      os.remove(mdwui.state.mdwFile)
+      mdwui.state.mdwFile = nil
+    end
+    return
+  end
   if package ~= mdwui.packageName then return end
   mdwui.state.updateInstalled = true
   mdwui.state.updateBusyAt = nil
@@ -424,4 +548,9 @@ function mdwui.onInstallPackage(_, package)
     os.remove(mdwui.state.updateFile)
     mdwui.state.updateFile = nil
   end
+  -- This package can be installed into a profile that has no MDW at all, and
+  -- this event is the first moment it can find out. Deferred by a tick, since
+  -- Mudlet's installer must not be re-entered from inside its own event.
+  local bootstrapId = tempTimer(0, function() mdwui.ensureMdw() end)
+  if bootstrapId then mdwui.addTimer(bootstrapId) end
 end

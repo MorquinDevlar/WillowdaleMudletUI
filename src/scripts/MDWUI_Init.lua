@@ -130,8 +130,15 @@ function mdwui.buildUI()
   -- its next setup, which is exactly when the player updates MDW.
   if not mdwui.mdwSatisfied() then
     local have = (mdw and mdw.version) or "older than 0.3.0"
-    local msg = string.format("%s needs MDW %s or newer (installed: %s) - update the MDW package.",
-      mdwui.packageName, mdwui.minMdwVersion, have)
+    -- The bootstrap (mdwui.ensureMdw) is already fetching MDW by the time an
+    -- old MDW gets this far, so the line says so - but it keeps the manual
+    -- instruction and the URL, because this gate is exactly what a player
+    -- with no network or a blocked GitHub is left holding.
+    -- Two sentences on two lines: one of them is a URL, and a single
+    -- ~150-character line wraps mid-URL on a narrow main window.
+    local msg = string.format("%s needs MDW %s or newer (installed: %s) - fetching MDW now.\n"
+      .. "If it does not arrive, install it by hand from %s",
+      mdwui.packageName, mdwui.minMdwVersion, have, mdwui.mdwUrl)
     -- mdw.notify only exists from MDW 0.3 on, hence the plain-echo fallback.
     if mdw and mdw.notify then mdw.notify(msg) else echo(msg .. "\n") end
     return
@@ -363,6 +370,14 @@ local handlers = {
   ["sysDownloadDone"] = function(event, path) mdwui.onDownloadDone(event, path) end,
   ["sysDownloadError"] = function(event, err, path) mdwui.onDownloadError(event, err, path) end,
   ["sysInstallPackage"] = function(event, package) mdwui.onInstallPackage(event, package) end,
+
+  -- MDW bootstrap (MDWUI_Update): Mudlet resolves no package dependencies, so
+  -- a profile carrying this package but no MDW installs MDW here. Every
+  -- script in the profile has loaded by the time this fires, which is why
+  -- mdw.version - a load-time assignment - can be trusted; calling ensureMdw
+  -- at script-load time instead would read a version that arrives a moment
+  -- later and throw away the load-order freedom the MDW contract gives us.
+  ["sysLoadEvent"] = function() mdwui.ensureMdw() end,
 }
 
 for event, fn in pairs(handlers) do

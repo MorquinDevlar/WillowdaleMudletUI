@@ -414,7 +414,16 @@ function moveCursor() end
 function moveCursorEnd() end
 function copy2decho() return "<255,255,255:0,0,0>stub" end
 
--- io.exists + table.save/load (Mudlet extensions) ----------------------------
+-- io.exists + table.contains + table.save/load (Mudlet extensions) -----------
+-- table.contains recurses into nested tables, as Mudlet's TableUtils.lua does;
+-- the bootstrap asks it whether MDW is among getPackages() before uninstalling.
+table.contains = function(t, value)
+  for _, v in pairs(t) do
+    if v == value then return true end
+    if type(v) == "table" and table.contains(v, value) then return true end
+  end
+  return false
+end
 io.exists = function(p)
   local f = io.open(p)
   if f then f:close() return true end

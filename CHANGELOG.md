@@ -77,7 +77,12 @@ out of the version number alone - so neither may change.
   install`, and `ui update` asks again whenever you want. There is no
   background polling. The download is checked before anything is removed, so
   a failed one leaves the working UI exactly where it was.
+- **One package to install.** The UI runs on the MDW framework, and installs
+  it for you when it is missing or too old - Mudlet cannot do that on its own.
+  A newer MDW than the UI needs is never touched, the download is checked
+  before the MDW you are running is replaced, and if it cannot be fetched you
+  are told where to get it by hand.
 - Install order with MDW does not matter, in either direction, and the UI
   rebuilds itself when MDW updates. MDW 0.4.0 or newer is required: with an
   older MDW the package declines to build and prints one explanatory line
-  instead of half a UI.
+  instead of half a UI while the version it needs is fetched.
