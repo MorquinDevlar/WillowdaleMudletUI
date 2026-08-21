@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.14 - 2026-08-22
+
 ### Changed
 - When an update needs a newer MDW, the UI now fetches MDW **first** and then
   updates itself. Before, it installed the new version and then discovered it
