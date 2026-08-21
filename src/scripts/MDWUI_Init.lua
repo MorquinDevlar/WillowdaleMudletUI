@@ -380,6 +380,11 @@ local handlers = {
     mdwui.renderTopBar()
   end,
 
+  -- The game's own lifecycle commands for this package (MDWUI_Update):
+  -- gomudui = "remove" / "update". Guarded on that key, because Mudlet's
+  -- native package install arrives on the same message.
+  ["gmcp.Client.GUI"] = function() mdwui.onClientGui() end,
+
   ["sysUninstallPackage"] = function(event, package) mdwui.onUninstall(event, package) end,
 
   -- Self-update (MDWUI_Update). Mudlet raises the download events for EVERY

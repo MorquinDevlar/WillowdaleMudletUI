@@ -393,6 +393,44 @@ local function installDownloaded(path)
 end
 
 ---------------------------------------------------------------------------
+-- SERVER-DRIVEN LIFECYCLE (Client.GUI)
+---------------------------------------------------------------------------
+
+--- The game drives the package's lifecycle over Client.GUI. Two shapes share
+-- that message and they must not be confused:
+--
+--   { version, url }      Mudlet's OWN native install path - it downloads and
+--                         installs the package itself. We must not touch it.
+--   { gomudui = "..." }   a command aimed at THIS package: "remove" or
+--                         "update".
+--
+-- Hence the guard on the gomudui key first: this handler runs on every
+-- Client.GUI, including the install one that arrives on login, and doing
+-- anything there would fight Mudlet for its own installer.
+--
+-- The key is `gomudui`, not a Willowdale name - it is the wire name from the
+-- server's Go struct, so it stays exactly as sent (the guide's rule: never
+-- rename a GMCP field).
+function mdwui.onClientGui()
+  local gui = gmcp and gmcp.Client and gmcp.Client.GUI
+  local command = type(gui) == "table" and gui.gomudui or nil
+  if type(command) ~= "string" then return end
+
+  if command == "remove" then
+    mdwui.say("The game asked to remove the UI - uninstalling now.")
+    -- Deferred a tick for the same reason the update swap defers its install:
+    -- this handler belongs to the package being torn down, and uninstallPackage
+    -- deletes the very handler we are standing in. Let the event finish first.
+    local id = tempTimer(0, function() uninstallPackage(mdwui.packageName) end)
+    if id then mdwui.addTimer(id) end
+  elseif command == "update" then
+    -- Manual, not the silent session check: the game asked on the player's
+    -- behalf, so an answer is owed even when there is nothing to install.
+    mdwui.checkForUpdate(true)
+  end
+end
+
+---------------------------------------------------------------------------
 -- BOOTSTRAPPING MDW
 --
 -- Mudlet resolves no dependencies: the mfile's "dependencies" field is read

@@ -1709,6 +1709,30 @@ check(printedBullets <= 40 and capped:find("more lines not shown", 1, true) ~= n
 
 -- The verb and its overview row, the rule for every player-facing toggle.
 check(uiRun("help update"):find("ui update", 1, true) ~= nil, "ui help update explains the verb")
+
+-- Client.GUI: the game drives this package's lifecycle over the same message
+-- Mudlet uses to install it natively, so the gomudui guard is what keeps the
+-- two apart.
+gmcp.Client = { GUI = { version = "1", url = "https://example/WillowdaleMudletUI.mpackage" } }
+local guiUninstalls, guiDownloads = #H.uninstalled, #H.downloads
+H.main._echoed = {}
+raiseEvent("gmcp.Client.GUI")
+H.flushTimers()
+check(#H.uninstalled == guiUninstalls and #H.downloads == guiDownloads
+  and table.concat(H.main._echoed) == "",
+  "Mudlet's own install payload (version/url) is left entirely alone")
+
+gmcp.Client.GUI = { gomudui = "update" }
+raiseEvent("gmcp.Client.GUI")
+check(#H.downloads == guiDownloads + 1 and H.downloads[#H.downloads].url == mdwui.releasesUrl,
+  "gomudui update asks the server for the feed")
+-- Manual, not the silent session check: the game asked, so it answers either way.
+check(feed(feedJson({ { mdwui.version, "2026-08-01", { "The first release" } } }))
+  :find("You are on the latest version", 1, true) ~= nil,
+  "and answers even when there is nothing to install")
+
+gmcp.Client.GUI = nil
+
 local ovUpdate = (uiRun(""):gsub("<[%w_]+>", ""))
 check(ovUpdate:find("update%s+" .. (mdwui.version:gsub("%.", "%%."))) ~= nil,
   "the overview carries a ui update row whose value is the installed version")
@@ -1960,8 +1984,20 @@ check(io.exists(mdwPath) == false, "and the downloaded MDW package is cleaned up
 -- 13. Uninstalling this package removes everything ours, leaves MDW running.
 -- The event carries the mfile package name - packageName must match it.
 -- An open context menu holds closures into this package, so it must go too.
+--
+-- Driven by the GAME's own removal command rather than a synthetic event, so
+-- this covers both halves at once: Client.GUI { gomudui = "remove" } reaching
+-- uninstallPackage, and the cleanup that call sets off.
 mdw.showContextMenu("stale actions", { { label = "Noop", onClick = function() end } }, 100, 100)
-raiseEvent("sysUninstallPackage", mdwui.packageName)
+local uninstallsBeforeRemove = #H.uninstalled
+gmcp.Client = { GUI = { gomudui = "remove" } }
+raiseEvent("gmcp.Client.GUI")
+check(#H.uninstalled == uninstallsBeforeRemove,
+  "remove does not uninstall from inside the event handler it is standing in")
+H.flushTimers()
+check(H.uninstalled[#H.uninstalled] == mdwui.packageName
+  and #H.uninstalled == uninstallsBeforeRemove + 1,
+  "a deferred tick then uninstalls this package, and only this one")
 check(mdw.menus.context == false and H.labels["MDW_ContextMenuBg"] == nil,
   "open context menu closed by our uninstall")
 check(mdw.widgets["Combat"] == nil and mdw.widgets["Comm"] == nil, "our widgets destroyed on uninstall")

@@ -22,6 +22,10 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Added
+- The game can now ask the UI to remove itself, or to check for an update, and
+  the UI does it.
+
 ### Changed
 - Inventory, Equipment and Forage open with room to show a full inventory
   without scrolling, and Affects and Keyring no longer take more height than
