@@ -346,6 +346,20 @@ local function verified(path)
   return true
 end
 
+--- Hand the verified package back. Shared, because every way an update can
+-- fail ends the same way: the file is on disk and good, so the one useful
+-- thing left is a click that installs it.
+--
+-- Spelled out, not "[Install it now]": this only ever appears when something
+-- has gone wrong, and the player reading it has just watched an update not
+-- happen. It should say what clicking will do.
+function mdwui.offerManualInstall(path)
+  if not cechoLink then return end
+  cechoLink(string.format("<%s>[Click here to manually install the update]", P.link),
+    function() installPackage(path) end, "Install " .. plain(path), true)
+  line("")
+end
+
 --- The last line of defence: if Mudlet never reported our package installed,
 -- the swap failed somewhere we cannot see. The verified file is still on
 -- disk, so hand it over with a click rather than leave a player with no UI.
@@ -364,14 +378,7 @@ function mdwui.updateWatchdog(path)
     why = "The install never ran - the timer that carries it did not fire."
   end
   line(string.format("  <%s>%s", P.dim, why))
-  if cechoLink then
-    -- Spelled out, not "[Install it now]": this line only ever appears when
-    -- something went wrong, and the player reading it has just watched an
-    -- update not happen. It should say what clicking will do.
-    cechoLink(string.format("<%s>[Click here to manually install the update]", P.link),
-      function() installPackage(path) end, "Install " .. plain(path), true)
-    line("")
-  end
+  mdwui.offerManualInstall(path)
 end
 
 --- The package file landed. Verify FIRST: nothing is uninstalled until the
@@ -414,6 +421,30 @@ local function installDownloaded(path)
   mdwui.say(string.format("Installing %s %s - the UI rebuilds itself when it lands.",
     mdwui.packageName, version))
   mdwui.state.updateInstalled = false
+
+  -- MDW first, because MDW is not the package being removed and so can do the
+  -- swap back to back and tell us what Mudlet actually said. The failure this
+  -- package spent a day on - an install offered before the uninstall had
+  -- finished, accepted, then silently ignored - cannot happen this way, and a
+  -- refusal is known HERE rather than twenty seconds later from a watchdog.
+  -- No timers either way, so there is no watchdog to arm.
+  if mdw and type(mdw.swapPackage) == "function" then
+    local swapped, refusal = mdw.swapPackage(mdwui.packageName, path)
+    if not swapped then
+      mdwui.sayBad(string.format("Update failed - %s. The package is saved at:",
+        plain(tostring(refusal or "unknown reason"))))
+      line(string.format("  <%s>%s", P.text, plain(path)))
+      mdwui.offerManualInstall(path)
+    end
+    -- Success needs nothing said here: the new package's own sysInstallPackage
+    -- handler reports it, and it has the version to name.
+    return
+  end
+
+  -- Fallback for an MDW without swapPackage. The version gate stops this
+  -- package BUILDING under an older MDW, but `ui update install` still works
+  -- there - which is exactly how a player gets themselves out of that state.
+  --
   -- Our own sysUninstallPackage cleanup runs INSIDE this call: it kills our
   -- timers and deletes our handlers. Both timers below are therefore created
   -- after it, or killAllTimers would take the install with it.
@@ -574,17 +605,22 @@ local function installMdw(path)
   -- name it already holds. getPackages is Mudlet 4.12+.
   if getPackages and table.contains(getPackages(), "MDW") then
     -- MDW's uninstall saves the layout and tears its UI down, which runs our
-    -- own mdw.onTeardown hook - and that calls killAllTimers. Every timer
-    -- below is created AFTER this call, or the install would be killed on its
-    -- way out; same rule, same reason, as the package swap above.
+    -- own mdw.onTeardown hook and kills our timers. That is survivable here
+    -- precisely because THIS package is not the one being removed - our code
+    -- is still running, which is the whole reason a package built on MDW is
+    -- what moves MDW.
     uninstallPackage("MDW")
   end
-  -- Same race as the package swap, one step more lethal: uninstalling MDW took
-  -- the whole UI down, so an install refused for a name Mudlet has not released
-  -- yet leaves the player with nothing. onInstallPackage clears mdwFile when
-  -- MDW reports in, which is this retry's stop signal.
-  local installId = tempTimer(INSTALL_WAIT_SECONDS, function() installPackage(path) end)
-  if installId then mdwui.addTimer(installId) end
+  -- So: no wait and no timer. This is the mirror of mdw.swapPackage - the same
+  -- back-to-back uninstall and install, in the direction MDW cannot do for
+  -- itself - and the answer is read here rather than guessed at. Uninstalling
+  -- MDW took the whole UI with it, so a refusal that went unnoticed would
+  -- leave a player with nothing and nothing said.
+  if not installPackage(path) then
+    mdwui.sayBad("MDW could not be installed - Mudlet refused the package.")
+    sayManualMdw()
+    return
+  end
   -- Nothing to activate afterwards: MDW's install runs setup -> onReady ->
   -- buildUI, and this package only ever seeded mdw.onReady, so the UI builds
   -- itself. The downloaded file is dropped when MDW reports in on

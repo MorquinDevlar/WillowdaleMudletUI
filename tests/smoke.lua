@@ -1707,36 +1707,50 @@ check(uiRun("update sideways"):find("Say install", 1, true) ~= nil,
 writeFile(H.downloads[#H.downloads].path, "PK\003\004tiny")
 raiseEvent("sysDownloadDone", H.downloads[#H.downloads].path)
 
--- The package swap, in order: verified file on disk, THEN uninstall, THEN a
--- deferred install (Mudlet's installer must not be re-entered from its own
--- event). Our own uninstall cleanup runs inside uninstallPackage, which is
--- why both timers are created after it.
+-- A refused swap is known AT ONCE, in a context that still exists, instead of
+-- being discovered twenty seconds later by a watchdog. Tested before the real
+-- swap below, because a swap uninstalls this package - and with it the very
+-- handlers that carry the next download event.
+local realSwap = mdw.swapPackage
+mdw.swapPackage = function() return false, "Mudlet refused the install" end
+mdwui.installUpdate()
+local refusedPath = H.downloads[#H.downloads].path
+writeFile(refusedPath, PACKAGE_BYTES)
+H.main._echoed, H.main._links = {}, {}
+raiseEvent("sysDownloadDone", refusedPath)
+local watch = table.concat(H.main._echoed)
+check(watch:find("Update failed", 1, true) ~= nil and watch:find("refused", 1, true) ~= nil,
+  "a refused swap says so immediately, with the reason MDW gave")
+check(watch:find(refusedPath, 1, true) ~= nil, "and hands the saved package back")
+check(watch:find("firebrick", 1, true) ~= nil,
+  "painted as a failure, not as ordinary output")
+check(uiLink("[Click here to manually install the update]") ~= nil,
+  "with a link that spells out what it will do, and really is clickable")
+mdw.swapPackage = realSwap
+os.remove(refusedPath)
+mdwui.state.updateBusyAt = nil
+
+-- The real swap. MDW does it: MDW is not the package being removed, so it
+-- uninstalls and installs back to back and returns what Mudlet said. A package
+-- cannot do that for itself - the code is inside the thing being uninstalled -
+-- which is why this used to be uninstall, tempTimer(1), install, and a
+-- watchdog to notice when that guess was wrong.
+mdwui.state.updateVersion = "9.9.9"
 mdwui.installUpdate()
 local swapPath = H.downloads[#H.downloads].path
 writeFile(swapPath, PACKAGE_BYTES)
 H.main._echoed, H.main._links = {}, {}
+local installsBeforeSwap = #H.installed
 raiseEvent("sysDownloadDone", swapPath)
 check(H.uninstalled[#H.uninstalled] == mdwui.packageName and #H.uninstalled == uninstallsBefore + 1,
   "a verified download uninstalls the running package")
-check(#H.installed == 0, "and the install waits one tick rather than running inside the event")
+check(H.installed[#H.installed] == swapPath and #H.installed == installsBeforeSwap + 1,
+  "and installs the replacement in the SAME call - no timer, nothing to wait for")
 check(mdw.widgets["Journal"] == nil, "our uninstall cleanup ran with it (widgets gone)")
-H.flushTimers()
-check(H.installed[#H.installed] == swapPath, "the deferred tick installs the verified file")
--- Nothing came back from that install in this run, so the watchdog speaks:
--- a failed swap must never strand a player with no UI and no file.
-local watch = table.concat(H.main._echoed)
-check(watch:find("did not finish installing", 1, true) ~= nil
-  and watch:find(swapPath, 1, true) ~= nil,
-  "the watchdog hands the saved package back when no install event arrives")
--- A failure that is painted like every other line is a failure a player
--- scrolls past, and the link has to say what clicking it does - this text only
--- ever appears after an update visibly did not happen.
-check(watch:find("firebrick", 1, true) ~= nil,
-  "and it is painted as a failure, not as ordinary output")
-check(watch:find("[Click here to manually install the update]", 1, true) ~= nil,
-  "with a link that spells out what it will do")
-check(uiLink("[Click here to manually install the update]") ~= nil,
-  "and the link really is clickable, not just text")
+local accepted = table.concat(H.main._echoed)
+check(accepted:find("Update failed", 1, true) == nil
+  and accepted:find("did not finish", 1, true) == nil,
+  "a swap Mudlet accepted reports no failure - the new package announces itself")
 
 -- Now the other half: Mudlet runs the new package's scripts, then raises
 -- sysInstallPackage. mdwui.state survives in the Lua state, which is how the
@@ -2043,12 +2057,14 @@ check(#H.downloads == bootInstalls + 1 and H.downloads[#H.downloads].url == mdwu
   "and then fetches MDW, which the profile has none of")
 mdwPath = H.downloads[#H.downloads].path
 writeFile(mdwPath, PACKAGE_BYTES)
+bootInstalls = #H.installed
 raiseEvent("sysDownloadDone", mdwPath)
 check(#H.uninstalled == bootUninstalls, "MDW absent: nothing is uninstalled on the way in")
-bootInstalls = #H.installed
-H.flushTimers()
+-- No timer: THIS package is not the one being removed, which is the whole
+-- reason a package built on MDW is what moves MDW. The mirror of
+-- mdw.swapPackage, in the direction MDW cannot do for itself.
 check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
-  "and the install runs a tick later, never inside Mudlet's own download event")
+  "and MDW installs in the same call, with no timer to wait out")
 
 -- An MDW that is merely too old: uninstall FIRST (Mudlet refuses to install
 -- over a name it holds), and only once the replacement is proven on disk.
@@ -2061,21 +2077,14 @@ bootInstalls = #H.installed
 raiseEvent("sysDownloadDone", mdwPath)
 check(H.uninstalled[#H.uninstalled] == "MDW" and #H.uninstalled == bootUninstalls + 1,
   "a verified download uninstalls the old MDW - only now, with the replacement on disk")
-check(#H.installed == bootInstalls, "the install still waits a tick")
 check(mdw.isSetUp == false, "MDW's teardown ran inside that uninstall (our onTeardown hook with it)")
-H.flushTimers()
+-- Our own timers died in that teardown, which does not matter: there are none
+-- to survive. This package is still running - it is not the one being removed -
+-- so it installs the replacement in the same breath and reads the answer.
 check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
-  "the install timer, created AFTER the uninstall, survived the teardown that killed our timers")
+  "and the replacement goes in immediately, teardown or no teardown")
 
--- The race that cost a live player their UI: Mudlet had not released the name
--- by the time the install ran, installPackage refused, and it reports that by
--- returning rather than raising - so the failure was silent and the watchdog
--- only spoke twenty seconds later. The install now waits for the name to leave
--- getPackages, and nothing about it is a guess.
--- The MDW swap follows the same sequence as the package swap and for the same
--- reason: uninstall, wait, install. Nothing here polls getPackages - a live
--- client proved the registry clears before the uninstall has finished, so it
--- is not a signal worth waiting on.
+-- The bootstrap guard, keyed on the version asked for rather than the session.
 local mdwVersionForRace = mdw.version
 mdw.version = "0.4.0" -- too old, so the bootstrap actually fetches
 H.packages = { "MDW" }
@@ -2089,11 +2098,8 @@ local heldPath = H.downloads[#H.downloads].path
 writeFile(heldPath, PACKAGE_BYTES)
 local heldInstalls = #H.installed
 raiseEvent("sysDownloadDone", heldPath)
-check(#H.installed == heldInstalls,
-  "the MDW install waits rather than running inside Mudlet's download event")
-H.flushTimers()
 check(H.installed[#H.installed] == heldPath and #H.installed == heldInstalls + 1,
-  "and then installs exactly once, on the timer")
+  "a raised minimum installs its MDW in the same call, exactly once")
 mdw.version = mdwVersionForRace
 
 -- The guard is per REQUIREMENT, not per session. It used to be a plain "have

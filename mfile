@@ -4,6 +4,6 @@
   "author": "Morquin",
   "icon": "server-icon_small.png",
   "title": "WillowdaleMUD UI",
-  "description": "The WillowdaleMUD interface for Mudlet, built on MDW (Mudlet Dockable Widgets).\n\nRecreates the Willowdale web client's widget layout: Character, Combat, Affects, Group, Equipment, Inventory, Keyring, Forage, Quests, Journal, Communications, and the native Mudlet mapper - all driven live by the game's GMCP feed, with a GMCP prompt bar.\n\nRequires MDW 0.5.1 or newer, which this package installs for you if it is missing. Install both; order does not matter.\n\nhttps://github.com/MorquinDevlar/mdw",
+  "description": "The WillowdaleMUD interface for Mudlet, built on MDW (Mudlet Dockable Widgets).\n\nRecreates the Willowdale web client's widget layout: Character, Combat, Affects, Group, Equipment, Inventory, Keyring, Forage, Quests, Journal, Communications, and the native Mudlet mapper - all driven live by the game's GMCP feed, with a GMCP prompt bar.\n\nRequires MDW 0.6.0 or newer, which this package installs for you if it is missing. Install both; order does not matter.\n\nhttps://github.com/MorquinDevlar/mdw",
   "outputFile": true
 }
