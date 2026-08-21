@@ -163,19 +163,32 @@ check(mdw.widgets["Comm"].stackId == "MDWUI_Comms"
   and mdw.widgets["Journal"].stackId == "MDWUI_Comms", "Comm|Quests|Journal grouped")
 check(mdw.widgets["MDWUI_Char"].docked == "left"
   and mdw.widgets["MDWUI_Comms"].docked == "right", "groups docked to the web-client sides")
--- First-run heights are a fraction of the window, not pixels: the items group
--- has to be tall enough to show a whole inventory without scrolling, and
--- MDWUI_Char is MDW's fill row, whose budget clamps at zero - so a fixed
--- height big enough for a large screen would silently collapse it on a small
--- one. Asserted as a RATIO so the numbers can be retuned without a test edit.
+-- First-run heights are measured from the content, not guessed as a fraction:
+-- rows times the real line box, plus a stack's chrome. The checks below are
+-- written around the failure that actually happened - MDW auto-fills the
+-- BOTTOM row of a dock, and sizing a stack while it is still the bottom row
+-- is silently discarded, so every default height sat at MDW's 200px no matter
+-- what was asked for. The old assertions compared the two stacks to each
+-- other and passed happily while BOTH were 200.
+local itemsStack = mdw.widgets["MDWUI_Items"]
+local statusStack = mdw.widgets["MDWUI_Status"]
+local itemsH = itemsStack.container:get_height()
+local statusH = statusStack.container:get_height()
 local _, smokeWinH = getMainWindowSize()
-local itemsH = mdw.widgets["MDWUI_Items"].container:get_height()
-local statusH = mdw.widgets["MDWUI_Status"].container:get_height()
-check(itemsH > statusH * 2,
-  "the items group opens far taller than the status group - an inventory is a list")
--- The invariant is about the SUM, not either one: MDW gives the last row
--- whatever is left, and its budget clamps at zero, so what must never happen
--- is these two together leaving the character group nothing.
+check(itemsStack.fill ~= true and statusStack.fill ~= true,
+  "neither sized group is the dock's fill row - a fill row cannot be sized at all")
+check(itemsH ~= mdw.config.widgetHeight and statusH ~= mdw.config.widgetHeight,
+  "and their first-run heights really were applied, not left at MDW's default")
+-- Tall enough for a whole equipment loadout, counted from the same table the
+-- renderer walks: a console with more content than height scrolls to the
+-- BOTTOM, so being short by two lines hides the Weapons header, not the tail.
+local wornRows = 0
+for i, section in ipairs(mdwui.config.wornSections) do
+  if i > 1 then wornRows = wornRows + 1 end
+  wornRows = wornRows + 1 + #section.slots
+end
+check(itemsH >= wornRows * mdw.charHeightEstimate(mdw.config.contentFontSize),
+  "the items group opens tall enough for a full equipment loadout")
 check(statusH + itemsH < smokeWinH * 0.75,
   "and together they leave real room for the character group MDW auto-fills")
 check(mdw.widgets["Map"].mapper ~= nil, "Map embeds the native mapper")
@@ -1843,6 +1856,17 @@ H.flushTimers()
 check(mdw.widgets["Combat"] ~= nil and mdw.widgets["Comm"] ~= nil,
   "widgets rebuilt after an MDW update")
 check(mdw.widgets["Equipment"].stackId ~= nil, "grouping restored after update")
+-- Heights survive a full MDW setup, and are still not MDW's default. This is
+-- the ordering trap: MDW auto-fills the BOTTOM row of a dock, and a stack
+-- sized while it is still the bottom row has that height DISCARDED - when the
+-- row later stops filling, reorganizeDock restores the height captured before
+-- the call. Sizing before every group exists therefore does nothing at all,
+-- silently, which is how every default here sat at 200px in a live client
+-- while the suite reported it fine.
+check(mdw.widgets["MDWUI_Items"].container:get_height() ~= mdw.config.widgetHeight,
+  "the items group keeps a real height through an MDW setup, not MDW's default")
+check(mdw.widgets["MDWUI_Items"].fill ~= true,
+  "and it is not the fill row, which cannot be sized at all")
 check(mdw.widgets["Items"] == nil, "demo widgets stay suppressed across MDW updates")
 check(H.labels["MDW_PromptGauge_hp_back"] ~= nil, "prompt gauges rebuilt after an MDW update")
 check(H.labels["MDW_PromptGauge_enemy_back"] ~= nil,

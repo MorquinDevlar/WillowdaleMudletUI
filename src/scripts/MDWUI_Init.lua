@@ -24,15 +24,64 @@
 --- Group freshly created widgets into a named stack, unless a saved layout
 -- already owns any of them. Returns silently in that case - the player's
 -- arrangement always beats our default.
-local function defaultGroup(names, stackName, dock, height)
+local function defaultGroup(names, stackName, dock)
   for _, name in ipairs(names) do
     local widget = mdw.widgets[name]
-    if not widget or widget._pendingStackId then return end
+    if not widget or widget._pendingStackId then return nil end
   end
-  local stack = mdw.groupWidgetsIntoStack(names, { dock = dock, name = stackName })
-  if stack and height then
-    mdw.resizeWidgetClass(stack, nil, height)
+  return mdw.groupWidgetsIntoStack(names, { dock = dock, name = stackName })
+end
+
+--- The height a stack needs to show `rows` lines without scrolling: the
+-- measured line box times the rows, plus the chrome a stack always carries.
+-- mdw.charHeightEstimate reads the real advance out of Qt (calcFontSize) and
+-- falls back to a ratio of the point size, so this tracks the player's font
+-- setting instead of assuming one.
+--
+-- WHY measured rows and not a fraction of the window: a fraction is wrong at
+-- both ends - too small on a laptop to show an equipment loadout, needlessly
+-- large on a big screen - while what a player actually wants is "show me all
+-- of it", and that is a row count, not a percentage.
+local function heightForRows(rows)
+  local cfg = mdw.config
+  local line = (mdw.charHeightEstimate and mdw.charHeightEstimate(cfg.contentFontSize))
+    or math.ceil((cfg.contentFontSize or 11) * (cfg.lineHeightRatio or 1.4))
+  return math.ceil(rows * line) + (cfg.titleHeight or 0) + (cfg.tabBarHeight or 0)
+    + (cfg.contentPaddingTop or 0) * 2
+end
+
+--- Rows a full equipment loadout occupies, counted from the SAME table the
+-- renderer walks - a header and its slots per section, with a blank line
+-- between - so adding a slot moves this height with it instead of leaving a
+-- number behind to rot.
+local function equipmentRows()
+  local rows = 0
+  for i, section in ipairs(mdwui.config.wornSections or {}) do
+    if i > 1 then rows = rows + 1 end
+    rows = rows + 1 + #(section.slots or {})
   end
+  return rows
+end
+
+--- Apply a first-run height to a stack defaultGroup actually created.
+--
+-- The fill guard is the whole point. MDW auto-fills the BOTTOM row of a dock,
+-- and reorganizeDock does not merely recompute a fill row's height - when the
+-- row stops filling it restores the height captured when it started filling,
+-- which is the one from before this call. Sizing a stack while it is still
+-- the bottom row therefore has no effect whatsoever, silently. That is what
+-- kept every default height in this file at MDW's 200px default no matter
+-- what fraction was asked for, on every profile, in every version.
+--
+-- So: heights are applied only once EVERY group exists, and a row that is
+-- still the fill is declined outright - exactly as mdw.setWidgetHeight
+-- declines one, and for the same stated reason.
+local function defaultHeight(stack, px)
+  if not stack or stack.fill then return end
+  local _, winH = getMainWindowSize()
+  -- Never claim so much that MDW's fill row is left with nothing: its budget
+  -- clamps at zero, so an over-large claim silently collapses the group below.
+  mdw.resizeWidgetClass(stack, nil, math.min(px, math.floor((winH or 0) * 0.55)))
 end
 
 --- The top chrome bar: session and identity strip between the header and the
@@ -245,11 +294,15 @@ function mdwui.buildUI()
   -- an inventory is counted, and a console with more content than height
   -- scrolls to the BOTTOM, so being short by two lines hides the Weapons
   -- header rather than the tail.
-  local _, winH = getMainWindowSize()
-  defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", math.floor(winH * 0.18))
-  defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", math.floor(winH * 0.52))
+  local statusStack = defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left")
+  local itemsStack = defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left")
   defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left")
   defaultGroup({ "Comm", "Quests", "Journal" }, "MDWUI_Comms", "right")
+  -- AFTER every group exists, never during: see defaultHeight. Until the
+  -- character group is created, the items group is the dock's bottom row and
+  -- anything set on it is discarded.
+  defaultHeight(statusStack, heightForRows(8))
+  defaultHeight(itemsStack, heightForRows(equipmentRows()))
   local map = mdw.widgets["Map"]
   if map and not map._pendingStackId and map.stackId then
     mdw.resizeWidgetClass(mdw.widgets[map.stackId], nil, 380)

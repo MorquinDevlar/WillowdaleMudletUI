@@ -22,6 +22,17 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- The Equipment, Inventory and Forage group finally opens at a useful size. It
+  had been stuck at the framework's default height on every profile and every
+  version, whatever the setting said, so an equipment loadout arrived already
+  scrolled past its first lines.
+
+### Changed
+- Widget heights are now worked out from the font you are using and the number
+  of rows a widget has to show, rather than a share of the window - so a full
+  equipment loadout fits on a laptop and does not waste half a large screen.
+
 ## 0.1.6 - 2026-08-22
 
 ### Fixed
