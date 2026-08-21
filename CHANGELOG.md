@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.16 - 2026-08-22
+
 ### Fixed
 - After an update, the interface comes back on its own. It could return with
   only the prompt bar, leaving the widgets missing until you typed
