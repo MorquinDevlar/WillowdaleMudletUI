@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.4 - 2026-08-21
+
 ### Fixed
 - Updating no longer fails silently. The install now waits for Mudlet to
   actually release the old package instead of guessing at a delay, so it goes
