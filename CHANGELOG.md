@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- The Equipment, Inventory and Forage group opens taller again, so a full
+  equipment loadout is visible without dragging. First-run layout only - if you
+  already have a layout saved, `ui reset confirm` is what puts the new
+  defaults back.
+
 ## 0.1.4 - 2026-08-21
 
 ### Fixed

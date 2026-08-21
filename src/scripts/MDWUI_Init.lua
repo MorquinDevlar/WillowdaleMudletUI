@@ -237,9 +237,17 @@ function mdwui.buildUI()
   --
   -- All first-run only: defaultGroup skips any widget whose placement a saved
   -- layout already owns.
+  -- MDW auto-fills the LAST row of a dock (reorganizeDock's autoFill), which
+  -- here is MDWUI_Char - so every pixel these two do not claim goes to
+  -- Character/Combat/Group, whose content is a dozen fixed lines. Claiming
+  -- generously for the items group is therefore how the slack reaches the
+  -- widget that can use it: a full equipment loadout is sixteen lines before
+  -- an inventory is counted, and a console with more content than height
+  -- scrolls to the BOTTOM, so being short by two lines hides the Weapons
+  -- header rather than the tail.
   local _, winH = getMainWindowSize()
   defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", math.floor(winH * 0.18))
-  defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", math.floor(winH * 0.46))
+  defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", math.floor(winH * 0.52))
   defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left")
   defaultGroup({ "Comm", "Quests", "Journal" }, "MDWUI_Comms", "right")
   local map = mdw.widgets["Map"]

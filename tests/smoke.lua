@@ -173,8 +173,11 @@ local itemsH = mdw.widgets["MDWUI_Items"].container:get_height()
 local statusH = mdw.widgets["MDWUI_Status"].container:get_height()
 check(itemsH > statusH * 2,
   "the items group opens far taller than the status group - an inventory is a list")
-check(itemsH < smokeWinH * 0.5 and statusH < smokeWinH * 0.25,
-  "and neither claims so much of the window that the character fill row is squeezed out")
+-- The invariant is about the SUM, not either one: MDW gives the last row
+-- whatever is left, and its budget clamps at zero, so what must never happen
+-- is these two together leaving the character group nothing.
+check(statusH + itemsH < smokeWinH * 0.75,
+  "and together they leave real room for the character group MDW auto-fills")
 check(mdw.widgets["Map"].mapper ~= nil, "Map embeds the native mapper")
 
 -- 3. Startup requests: full payload + native map feed
