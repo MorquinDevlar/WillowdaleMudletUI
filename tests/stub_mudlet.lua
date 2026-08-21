@@ -368,6 +368,11 @@ function downloadFile(path, url)
 end
 function installPackage(path)
   H.installed[#H.installed + 1] = path
+  -- Real Mudlet RUNS a package's scripts as part of installing it, before this
+  -- call returns. Modelling only the record kept the suite from ever seeing
+  -- what a package does to itself on the way in - including whether it rebuilds
+  -- its own UI. A test sets H.onInstallScripts to supply that.
+  if H.onInstallScripts then H.onInstallScripts(path) end
   return true
 end
 function getPackages()

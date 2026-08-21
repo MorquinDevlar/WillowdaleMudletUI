@@ -1782,6 +1782,14 @@ mdwui.state.updateBusyAt = nil
 -- which is why this used to be uninstall, tempTimer(1), install, and a
 -- watchdog to notice when that guess was wrong.
 mdwui.state.updateVersion = "9.9.9"
+-- Mudlet runs the new package's scripts INSIDE installPackage, which is where
+-- this package's late-join rebuilds its UI. Doing it after the fact, as this
+-- suite used to, never exercised that.
+H.onInstallScripts = function()
+  for _, name in ipairs(UI_ORDER) do
+    assert(pcall(dofile, "src/scripts/" .. name .. ".lua"), "failed reloading " .. name)
+  end
+end
 mdwui.installUpdate()
 local swapPath = H.downloads[#H.downloads].path
 writeFile(swapPath, PACKAGE_BYTES)
@@ -1792,7 +1800,11 @@ check(H.uninstalled[#H.uninstalled] == mdwui.packageName and #H.uninstalled == u
   "a verified download uninstalls the running package")
 check(H.installed[#H.installed] == swapPath and #H.installed == installsBeforeSwap + 1,
   "and installs the replacement in the SAME call - no timer, nothing to wait for")
-check(mdw.widgets["Journal"] == nil, "our uninstall cleanup ran with it (widgets gone)")
+-- Mudlet runs the new scripts inside installPackage, so by the time the swap
+-- returns the package has already late-joined and rebuilt itself. That is the
+-- whole point of the seeds: nothing activates the UI, it comes back on its own.
+check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
+  "and the new scripts rebuilt the UI on their way in, with nothing to activate")
 local accepted = table.concat(H.main._echoed)
 check(accepted:find("Update failed", 1, true) == nil
   and accepted:find("did not finish", 1, true) == nil,
@@ -1816,6 +1828,20 @@ check(doneLine:find("installed - done", 1, true) ~= nil
   and doneLine:find(mdwui.version, 1, true) ~= nil,
   "a finished swap says so, and names the version now running")
 check(io.exists(swapPath) == false, "and the temp package file is cleaned up after it lands")
+-- A live client came back from a swap with its prompt gauges and nothing else:
+-- the widgets HAD been built, and something reaped them afterwards - the old
+-- copy's uninstall bookkeeping arriving late, against an ownership stamp the
+-- new copy shares. `ui rebuild` put it right, so the swap now asks for that
+-- itself rather than leaving a player to work it out.
+mdw.cleanupGame(mdwui.packageName) -- exactly what reaps a stamped owner's things
+check(mdw.widgets["Journal"] == nil, "a late reap can still take the fresh widgets")
+H.flushTimers()
+check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
+  "so the swap rebuilds once more afterwards, and the UI comes back by itself")
+-- cleanupGame also strips the onReady/onTeardown registrations, which a real
+-- reinstall re-seeds by running the package's scripts. Do the same, or the
+-- rest of the suite runs against a package MDW no longer knows about.
+H.onInstallScripts()
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
   "the swapped-in package rebuilt the whole UI from its seeds")
 check(#H.downloads == downloadsBeforeSwap, "the rebuild after the swap does not re-check the feed")

@@ -22,6 +22,11 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- After an update, the interface comes back on its own. It could return with
+  only the prompt bar, leaving the widgets missing until you typed
+  `ui rebuild`.
+
 ## 0.1.15 - 2026-08-22
 
 ### Changed
