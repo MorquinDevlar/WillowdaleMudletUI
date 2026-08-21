@@ -336,10 +336,9 @@ end
 --- Shared numbered list for Inventory and Forage (updateInventoryList and
 -- updateIngredientsList render identically): " N - name (qty|uses)" rows,
 -- each row ONE link carrying the item tooltip - same hover reasoning as the
--- equipment panel. Menus mirror the web client (gmcp-ui.js): inventory is
--- [own verb?, Look, Drop] - items know their primary verb (guide 8.9) - and
--- the ingredient bag leads with Eat (the eat command consumes straight from
--- the bag), then the verb unless it IS eat.
+-- equipment panel. Menus are [own verb?, Look, Drop] for both lists - items
+-- know their primary verb (guide 8.9), which is "eat" for anything edible, so
+-- the ingredient bag needs no rule of its own.
 local function renderItemList(co, items, isForage)
   local C = mdwui.config.colors
   for i, item in ipairs(mdwui.tbl(items)) do
@@ -351,10 +350,16 @@ local function renderItemList(co, items, isForage)
     -- without any inventory push repainting this list.
     local actions = function()
       local list = {}
-      if isForage then
-        list[#list + 1] = { label = "Eat", command = "eat " .. id }
-      end
-      if verb and not (isForage and item.command == "eat") then
+      -- No special case for the ingredient bag any more. An item that is meant
+      -- to be eaten already carries "eat" as its own primary verb (guide 8.9),
+      -- so the generic row below produces exactly the Eat the bag wants, in
+      -- the same leading position - while a crafting material, whose command
+      -- is empty, correctly offers nothing to do but Look and Drop.
+      --
+      -- The bag used to add Eat unconditionally, which is what the guide (5.7)
+      -- and the web client still do, and it put "Eat" on a Fine Brown Hare
+      -- Pelt. The item's own verb was the better signal all along.
+      if verb then
         list[#list + 1] = { label = verb, command = item.command .. " " .. id }
       end
       list[#list + 1] = { label = "Look", command = "look " .. id }

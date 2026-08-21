@@ -22,6 +22,10 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- Clicking a crafting material in the forage bag no longer offers to eat it.
+  Eat is offered for food, and for anything the game says is eaten.
+
 ## 0.1.8 - 2026-08-22
 
 ### Fixed

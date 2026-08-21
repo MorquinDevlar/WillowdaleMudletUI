@@ -227,7 +227,10 @@ gmcp = {
         { type = "Key", location = "By the Cooper's Yard", roomid = 82, where = "south", sequence = "" },
         { type = "Lockpick", location = "Thieves' Den", roomid = 133, where = "chest", sequence = "1-3-2" },
       },
-      Ingredients = { items = { { id = "!22:cc", name = "moss", quantity = 2 } }, count = 2, max = 30 },
+      Ingredients = { items = {
+        { id = "!22:cc", name = "moss", quantity = 2, sub_type = "food", command = "eat" },
+        { id = "!19022:1", name = "Fine Brown Hare Pelt", quantity = 1, sub_type = "material", command = "" },
+      }, count = 2, max = 30 },
     },
     Combat = {
       Enemies = { { id = 5, name = "a goblin", is_primary = true, health = 30, health_max = 40 },
@@ -503,13 +506,20 @@ check(keyOut:find("Sequence: <92,179,165>1%-3%-2"), "lockpick sequence on its ow
 raiseEvent("gmcp.Char.Inventory.Ingredients")
 local forageText = joined(mdw.widgets["Forage"])
 check(forageText:find("moss") and forageText:find("(2)", 1, true)
-  and forageText:find("1 out of 30 items.", 1, true),
+  and forageText:find("2 out of 30 items.", 1, true),
   "forage renders the same numbered list and footer")
--- The ingredient menu leads with Eat (consumes straight from the bag)
+-- The ingredient menu leads with Eat, for something that can BE eaten: the bag
+-- holds crafting materials too, and "Eat" on a hare pelt is nonsense a player
+-- has to read past every time.
 findLink(mdw.widgets["Forage"].content, "moss").cb()
-check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Eat") ~= nil, "ingredient menu leads with Eat")
+check(H.labels["MDW_ContextMenuItem1"]._echoed[1]:find("Eat") ~= nil,
+  "an edible ingredient leads with Eat")
 H.callbacks["MDW_ContextMenuItem1"].click()
 check(H.sent[#H.sent] == "eat !22:cc", "menu Eat sends with the ingredient id")
+findLink(mdw.widgets["Forage"].content, "Hare Pelt").cb()
+local pelt = H.labels["MDW_ContextMenuItem1"]._echoed[1]
+check(pelt:find("Eat") == nil and pelt:find("Look") ~= nil,
+  "a crafting material offers no Eat at all, and leads with Look")
 -- Still in the shop from above: the ingredient bag sells too (sell.go
 -- searches backpack then ingredient bag)
 findLink(mdw.widgets["Forage"].content, "moss").cb()
