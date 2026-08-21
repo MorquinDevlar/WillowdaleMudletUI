@@ -54,19 +54,25 @@ mdwui.minMdwVersion = "0.5.0"
 -- makes every bootstrap download a GitHub error page instead of a package.
 mdwui.mdwUrl = "https://github.com/MorquinDevlar/mdw/releases/download/v0.5.0/MDW.mpackage"
 
--- Where the self-updater (MDWUI_Update.lua) looks. The feed is the package's
--- OWN CHANGELOG.md, read raw from the default branch; it carries no URLs, so
--- these three lines are the only place a release can be pointed at.
+-- Where the self-updater (MDWUI_Update.lua) looks. The GAME SERVER hosts both
+-- files, and a player's client reads nothing else: a push to this repo's main
+-- fires the server's GitHub webhook, which copies build/*.mpackage and
+-- releases/releases.json out of the repo into static/resources/ui/. GitHub
+-- releases are our own archive, not a distribution channel - nothing
+-- player-facing points at them, so the tag scheme is no longer a contract.
 --
--- The tag format (v<version>) and the asset basename (the package name) are a
--- RELEASE CONTRACT shared with tools/release.sh: the updater builds the
--- download URL from them rather than reading one, so a release published
--- under a different tag or asset name is a release no player can install.
--- Change one side and the other has to change with it.
-mdwui.repoSlug = "MorquinDevlar/WillowdaleMudletUI"
-mdwui.changelogUrl = "https://raw.githubusercontent.com/" .. mdwui.repoSlug .. "/main/CHANGELOG.md"
-mdwui.releaseUrlFormat = "https://github.com/" .. mdwui.repoSlug
-  .. "/releases/download/v%s/" .. mdwui.packageName .. ".mpackage"
+-- The package file carries NO version in its name: the server keeps exactly
+-- one copy, the newest, at a fixed path. The version lives in the feed
+-- instead - releases.json, newest entry first, the same shape the mapper
+-- package already ships against:
+--   [ { "version": "3.0.0", "released": "2026-08-21", "changes": [ "..." ] } ]
+--
+-- Consequence for the release process: PUSHING MAIN IS DEPLOYING. There is no
+-- separate publish step, and tools/release.sh is what keeps build/ and
+-- releases/releases.json in step with the version before it pushes.
+mdwui.updateBaseUrl = "https://updates.willowdalemud.com/static/resources/ui"
+mdwui.releasesUrl = mdwui.updateBaseUrl .. "/releases.json"
+mdwui.packageUrl = mdwui.updateBaseUrl .. "/" .. mdwui.packageName .. ".mpackage"
 
 ---------------------------------------------------------------------------
 -- CONFIGURATION

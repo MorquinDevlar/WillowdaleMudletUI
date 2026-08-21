@@ -22,6 +22,10 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- Updates now come from the game server rather than from GitHub, so the UI
+  finds and fetches a new version the same way the mapper does.
+
 ## 0.1.1 - 2026-08-21
 
 ### Changed

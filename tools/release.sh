@@ -12,13 +12,22 @@
 # becomes the GitHub release notes verbatim, and an empty Unreleased section
 # is a hard stop rather than a release with no notes.
 #
-# The tag format vX.Y.Z and the asset basename WillowdaleMudletUI.mpackage are
-# a CONTRACT with the package's own updater. It derives the download URL from
-# the version alone:
-#   https://github.com/MorquinDevlar/WillowdaleMudletUI/releases/download/vX.Y.Z/WillowdaleMudletUI.mpackage
-# and reads the release notes by fetching CHANGELOG.md raw from main. Rename
-# the tag or the asset, or move the changelog, and every already-installed
-# client loses its update path - they have no other way to find a release.
+# PUBLISHING THE GITHUB RELEASE IS DEPLOYING - pushing main is not. The game
+# server subscribes to this repo's *release* events, and when one is published
+# it downloads that release's two assets into its own static/resources/ui/,
+# which is the only place an installed client ever looks:
+#   WillowdaleMudletUI.mpackage  ->  .../static/resources/ui/WillowdaleMudletUI.mpackage
+#   releases.json                ->  .../static/resources/ui/releases.json
+#
+# That is why nothing generated is committed: build/ stays ignored and the feed
+# is built into a temp file here. A release is a deliberate act with a
+# deliberate payload, so an ordinary commit - or a mistaken one - can never
+# reach a player. It also means the tag format (vX.Y.Z) and the two ASSET
+# BASENAMES are a contract with the server's handler, which looks assets up by
+# name. Rename either and a published release deploys nothing.
+#
+# The feed is generated from CHANGELOG.md (tools/changelog_to_releases.lua), so
+# the notes a player is shown and the notes in the repo cannot drift apart.
 
 set -euo pipefail
 
@@ -138,6 +147,20 @@ step "Running the smoke suite"
 lua5.1 tests/smoke.lua || restore_and_die "smoke suite failed"
 step "Running luacheck"
 "$luacheck" src/ tests/ || restore_and_die "luacheck reported warnings"
+# The feed the players actually read, generated from the changelog just
+# promoted so the two can never disagree. It is UPLOADED, never committed:
+# a generated file in git is a generated file someone can commit by mistake.
+step "Generating the release feed"
+feed_file="$tmpdir/releases.json"
+lua5.1 tools/changelog_to_releases.lua >"$feed_file" ||
+    restore_and_die "could not generate releases.json from CHANGELOG.md"
+# The newest entry is what every client compares against its own version. If it
+# is not the version being cut, clients are offered a release that the uploaded
+# package is not.
+feed_version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$feed_file" | head -1)
+[ "$feed_version" = "$version" ] ||
+    restore_and_die "the feed leads with $feed_version, not $version"
+
 step "Building the package"
 muddle || restore_and_die "muddle build failed"
 # Muddler names the output after the mfile "package" value, so this check also
@@ -155,16 +178,25 @@ git tag -a "$tag" -m "WillowdaleMUD UI $version"
 
 # main goes up before the release exists, so the CHANGELOG the updater fetches
 # raw from main already carries the section for the version it is about to see.
+# The push is NOT the deploy - publishing the release below is. Main goes up
+# first so the tag it carries exists before the release references it.
 step "Pushing to origin"
 git push origin main
 git push origin "$tag"
 
-# The asset keeps its basename, WillowdaleMudletUI.mpackage, which is the half
-# of the download URL the updater constructs rather than discovers.
-step "Publishing the GitHub release"
-release_url=$(gh release create "$tag" build/WillowdaleMudletUI.mpackage --title "$tag" --notes-file "$notes_file")
+# THE DEPLOY. Both assets go up in one call, and their basenames are what the
+# server's release handler looks for: WillowdaleMudletUI.mpackage and
+# releases.json. A release published with only one of them deploys a package
+# no feed announces, or a feed pointing at a package that never arrived.
+step "Publishing the GitHub release (this deploys to the game server)"
+release_url=$(gh release create "$tag" \
+    build/WillowdaleMudletUI.mpackage "$feed_file" \
+    --title "$tag" --notes-file "$notes_file")
 printf '    %s\n' "$release_url"
 
 printf '\nReleased WillowdaleMUD UI %s\n' "$version"
 printf '  tag:     %s\n' "$tag"
 printf '  release: %s\n' "$release_url"
+printf '  feed:    https://updates.willowdalemud.com/static/resources/ui/releases.json\n'
+printf '\nThe game server deploys from the published release above; give its webhook\n'
+printf 'a moment, then confirm the feed leads with %s before announcing it.\n' "$version"

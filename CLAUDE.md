@@ -153,33 +153,73 @@ change needs a live Mudlet test against the game.
 
 ## Releases and self-update
 
+PUBLISHING THE GITHUB RELEASE IS DEPLOYING - pushing main is not. The game
+server subscribes to this repo's *release* events; when one is published it
+downloads that release's two assets into its own `static/resources/ui/`, which
+is the ONLY place an installed client ever looks. There is no deploy-on-push,
+by design: a release is a deliberate act with a deliberate payload, so an
+ordinary commit - or a mistaken one - can never reach a player.
+
+Consequently NOTHING GENERATED IS COMMITTED. `build/` and `releases/` are both
+gitignored; `tools/release.sh` builds the package, generates the feed into a
+temp file, and uploads both as release assets. A generated file in git is a
+generated file someone can ship by mistake, which is the exact failure this
+design exists to remove.
+
+The tag format `vX.Y.Z` and the two ASSET BASENAMES are therefore a contract
+with the server's release handler, which looks assets up by name:
+
+- `WillowdaleMudletUI.mpackage` - the package itself;
+- `releases.json` - the update feed.
+
+A release published with only one of them deploys a package no feed announces,
+or a feed pointing at a package that never arrived. Rename either, or the tag
+scheme, and a published release deploys nothing at all.
+
 Changelog entries land under `## Unreleased` in `CHANGELOG.md` in the same
 commit as the change, player-facing only - so the notes for a release exist
 before the release does. `tools/release.sh X.Y.Z` is the ONLY way a release is
 cut: it bumps `mfile` and `mdwui.version` together (the smoke suite asserts
-they match), promotes `## Unreleased` to `## X.Y.Z - <date>`, runs the three
-verification steps, commits "Release X.Y.Z", tags `vX.Y.Z`, pushes main, and
-publishes the GitHub release with `build/WillowdaleMudletUI.mpackage`
-attached. An empty `## Unreleased` is a hard stop, and any failure from the
-bump onwards restores the tree. Never bump a version, tag, or publish by hand,
-and never commit `build/` - it is gitignored.
+they match), promotes `## Unreleased` to `## X.Y.Z - <date>`, generates the
+feed from that changelog, runs the three verification steps, commits
+"Release X.Y.Z" (SOURCE ONLY), tags `vX.Y.Z`, pushes main, and publishes the
+release with both assets attached - which is the deploy. An empty
+`## Unreleased` is a hard stop, as is a feed whose newest entry is not the
+version being cut, and any failure from the bump onwards restores the tree.
+Never bump a version, tag, or publish by hand.
 
-The tag format `vX.Y.Z` and the asset basename `WillowdaleMudletUI.mpackage`
-are a CONTRACT, because the updater in `MDWUI_Update.lua` constructs rather
-than discovers:
+The feed is GENERATED at release time, never hand-edited and never committed -
+`tools/changelog_to_releases.lua` turns `CHANGELOG.md` into it, so the notes a
+player is shown and the notes in the repo cannot drift apart. Its shape is the
+game server's, shared with the mapper package: a JSON array, newest first, of
+`{ version, released, changes[] }`. The heading pattern's digit class excludes
+`## Unreleased` in the generator exactly as it did in the package's old
+parser - work that is in no release must never be offered as one.
 
-- it fetches `CHANGELOG.md` raw from main
-  (`https://raw.githubusercontent.com/MorquinDevlar/WillowdaleMudletUI/main/CHANGELOG.md`)
-  and parses `## X.Y.Z - date` headings. `## Unreleased` deliberately does not
-  match that pattern, which is exactly why unreleased notes are invisible to
-  players;
-- it compares the newest such version against `mdwui.version` with the
-  existing `mdwui.versionAtLeast` - no second comparison implementation;
-- it derives the download URL from that version by convention:
-  `.../releases/download/vX.Y.Z/WillowdaleMudletUI.mpackage`.
+The updater in `MDWUI_Update.lua` therefore reads two fixed URLs
+(`mdwui.releasesUrl`, `mdwui.packageUrl` in `MDWUI_Config.lua`) and constructs
+neither:
 
-Rename the tag scheme, the asset, or the changelog and every installed client
-silently loses its update path - they have no other way to find a release.
+- it fetches `releases.json`, decodes it with `json_to_value` (the same
+  decoder the Journal reads book documents with - the package has one JSON
+  parser, not two), and takes the entries newest-first;
+- it compares against `mdwui.version` with the existing `mdwui.versionAtLeast`
+  - no second comparison implementation;
+- it downloads the package from ONE fixed path. The version is carried through
+  for the message and the filename, but it does not select what arrives, so a
+  feed and a package can never disagree about where to look.
+
+A feed entry is remote text from a server having a possible bad day: a
+non-array, a missing version, a wrong-typed field are each skipped rather than
+thrown, because an error inside a download handler costs the player the update
+path entirely.
+
+Move the server paths and every installed client silently loses its update
+path - they have no other way to find a release.
+
+The server side of this lives in the game's own repo (its release-event
+handler); `RELEASE_DEPLOY_HANDOFF.md`, gitignored like the other cross-repo
+notes, is the spec it was built from.
 
 The updater's own invariants, none of them obvious from the code:
 `mdwui.state`'s `update*` keys are read across the swap - the watchdog armed by
@@ -190,7 +230,7 @@ because our own cleanup runs inside that call and `killAllTimers` would
 otherwise take the pending install with it. The in-flight guard is a TIMESTAMP
 with a 60s staleness window, never a boolean: Mudlet does not raise
 `sysDownloadDone` or `sysDownloadError` in every failure mode, and a boolean
-would wedge the checker for the session. Changelog text is REMOTE text and
+would wedge the checker for the session. Feed text is REMOTE text and
 goes through `plain()` like anything from the game.
 
 Update checking has deliberately NO periodic timer: once per session from

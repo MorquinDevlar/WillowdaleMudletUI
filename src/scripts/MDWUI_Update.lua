@@ -83,38 +83,46 @@ local function inline(text)
   return (tostring(text):gsub("%*%*", ""):gsub("`", ""))
 end
 
---- Parse a CHANGELOG.md into an ordered list of releases, newest first:
---   { version = "0.2.0", date = "2026-08-22", notes = { {kind, text}, ... } }
--- `kind` is "head" (### Added), "bullet" (- / *) or "text" (anything else,
--- kept rather than dropped - a changelog is prose we do not control).
+--- Parse the server's releases.json into an ordered list of releases, newest
+-- first: { version = "3.0.0", date = "2026-08-21", notes = { {kind, text} } }.
+-- The shape is the game server's, copied verbatim out of releases/releases.json
+-- on every push to main, and it is the one the mapper package already ships
+-- against: [ { version, released, changes = { "line", ... } } ].
 --
--- The heading pattern's digit class is what excludes "## Unreleased", and
--- that is load-bearing: the Unreleased section is work that is not in any
--- release yet, so it must never be offered as one. Any other level-2 heading
--- simply ends the release above it and starts none.
-function mdwui.parseChangelog(text)
-  local releases, current = {}, nil
-  for raw in (tostring(text or "") .. "\n"):gmatch("([^\n]*)\n") do
-    local ln = raw:gsub("\r$", "")
-    -- The brackets are optional because both spellings of the Keep a
-    -- Changelog heading exist in the wild ("## 0.2.0 - date" and
-    -- "## [0.2.0] - date"); neither form can match a word.
-    local version, date = ln:match("^##%s+%[?([%d%.]+)%]?%s*%-?%s*(%S*)")
-    if version then
-      current = { version = version, date = (date ~= "" and date) or nil, notes = {} }
-      releases[#releases + 1] = current
-    elseif ln:match("^##%s") then
-      current = nil
-    elseif current then
-      local head = ln:match("^###%s+(.+)$")
-      local bullet = ln:match("^%s*[%-%*]%s+(.+)$")
-      if head then
-        current.notes[#current.notes + 1] = { kind = "head", text = inline(head) }
-      elseif bullet then
-        current.notes[#current.notes + 1] = { kind = "bullet", text = inline(bullet) }
-      elseif ln:match("%S") then
-        current.notes[#current.notes + 1] = { kind = "text", text = inline((ln:gsub("^%s+", ""))) }
+-- Every entry is defensive because this is REMOTE text: a feed that is not an
+-- array, an entry with no version, a changes list that is not a list - each is
+-- skipped rather than thrown, since the alternative is an error inside a
+-- download handler and a player with no update path at all. The `notes` shape
+-- is kept identical to what the old changelog parser produced so the
+-- presentation layer below did not have to change: `kind` is always "bullet"
+-- here, because a JSON feed has no sub-headings to label.
+--
+-- inline() strips markdown from every line for the same reason it always did -
+-- these strings are prose we do not control.
+function mdwui.parseReleases(text)
+  if type(text) ~= "string" or text == "" then return {} end
+  -- json_to_value is the decoder this package already reads book documents
+  -- with (MDWUI_Journal), so the feed does not introduce a second one. Guarded
+  -- the same way: no decoder means no update path, not an error.
+  if not json_to_value then return {} end
+  local ok, feed = pcall(json_to_value, text)
+  if not ok or type(feed) ~= "table" then return {} end
+  local releases = {}
+  for _, entry in ipairs(feed) do
+    if type(entry) == "table" and type(entry.version) == "string" and entry.version ~= "" then
+      local release = {
+        version = entry.version,
+        date = type(entry.released) == "string" and entry.released or nil,
+        notes = {},
+      }
+      if type(entry.changes) == "table" then
+        for _, change in ipairs(entry.changes) do
+          if type(change) == "string" or type(change) == "number" then
+            release.notes[#release.notes + 1] = { kind = "bullet", text = inline(tostring(change)) }
+          end
+        end
       end
+      releases[#releases + 1] = release
     end
   end
   return releases
@@ -176,7 +184,9 @@ local function announce(newer)
     line(lines[i])
   end
   if #lines > MAX_NOTE_LINES then
-    line(string.format("  <%s>(%d more lines - see the changelog)", P.dim, #lines - MAX_NOTE_LINES))
+    -- No "see the changelog": the feed IS the notes now, and releases.json
+    -- is not something a player can usefully be sent to read.
+    line(string.format("  <%s>(%d more lines not shown)", P.dim, #lines - MAX_NOTE_LINES))
   end
   if cechoLink then
     -- A client action, not a game command: the outbound rule (widget
@@ -214,7 +224,8 @@ local function readFile(path, mode)
   return text
 end
 
---- Ask GitHub for the changelog. `manual` is the `ui update` path: it speaks
+--- Ask the game server for the release feed. `manual` is the `ui update` path:
+-- it speaks
 -- even when there is nothing to say. The session's own check stays silent
 -- unless there is an update - a login is not a question the player asked.
 function mdwui.checkForUpdate(manual)
@@ -228,11 +239,11 @@ function mdwui.checkForUpdate(manual)
   end
   mdwui.state.updateBusyAt = os.time()
   mdwui.state.updateManual = manual and true or false
-  mdwui.state.updateFeedPath = string.format("%s/%s-CHANGELOG.md", homeDir(), mdwui.packageName)
+  mdwui.state.updateFeedPath = string.format("%s/%s-releases.json", homeDir(), mdwui.packageName)
   if manual then
     mdwui.say(string.format("Checking for a newer %s...", mdwui.packageName))
   end
-  downloadFile(mdwui.state.updateFeedPath, mdwui.changelogUrl)
+  downloadFile(mdwui.state.updateFeedPath, mdwui.releasesUrl)
   return true
 end
 
@@ -246,17 +257,17 @@ function mdwui.checkForUpdateOnce()
   mdwui.checkForUpdate(false)
 end
 
---- The changelog landed: compare, and either offer the update or say nothing.
+--- The release feed landed: compare, and either offer the update or say nothing.
 local function readFeed(path)
   local manual = mdwui.state.updateManual
   mdwui.state.updateManual = false
   local text = readFile(path)
   os.remove(path) -- a cache of it would only ever be read as fresh
   if not text or text == "" then
-    if manual then mdwui.say("Could not read the changelog. Try again later.") end
+    if manual then mdwui.say("Could not read the release list. Try again later.") end
     return
   end
-  local newer = mdwui.newerReleases(mdwui.parseChangelog(text), mdwui.version)
+  local newer = mdwui.newerReleases(mdwui.parseReleases(text), mdwui.version)
   if #newer == 0 then
     if manual then
       mdwui.say(string.format("You are on the latest version (%s).", mdwui.version))
@@ -271,9 +282,11 @@ end
 -- INSTALLING
 ---------------------------------------------------------------------------
 
---- Fetch the release asset for the version the feed offered. The URL is
--- built, never read: the tag is v<version> and the asset is named after the
--- package (mdwui.releaseUrlFormat - the contract tools/release.sh keeps).
+--- Fetch the package the server is hosting. The URL is FIXED, not built from
+-- the version: the server keeps exactly one copy at one path, replaced by the
+-- webhook on every push to main. The version the feed offered is still carried
+-- through - it names the download and the message - but it does not select
+-- what arrives, so a feed and a package can never disagree about the path.
 function mdwui.installUpdate()
   local version = mdwui.state.updateVersion
   if not version then
@@ -288,7 +301,7 @@ function mdwui.installUpdate()
     mdwui.say("This Mudlet cannot download files.")
     return
   end
-  mdwui.state.updateUrl = string.format(mdwui.releaseUrlFormat, version)
+  mdwui.state.updateUrl = mdwui.packageUrl
   mdwui.state.updateFile = string.format("%s/%s-%s.mpackage", homeDir(), mdwui.packageName, version)
   mdwui.state.updateBusyAt = os.time()
   mdwui.say(string.format("Downloading %s %s...", mdwui.packageName, version))
@@ -519,7 +532,7 @@ function mdwui.onDownloadError(_, errorMessage, savedPath)
   mdwui.say(string.format("%s download failed: %s",
     isFeed and "Changelog" or "Update", plain(errorMessage or "unknown error")))
   line(string.format("  <%s>%s", P.dim,
-    plain(isFeed and mdwui.changelogUrl or (mdwui.state.updateUrl or ""))))
+    plain(isFeed and mdwui.releasesUrl or (mdwui.state.updateUrl or ""))))
 end
 
 --- sysInstallPackage(event, packageName) - the far side of the swap. Mudlet

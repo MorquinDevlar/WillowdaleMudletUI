@@ -1487,53 +1487,52 @@ local function aheadBy(steps)
   return ((tonumber(mdwui.version:match("^(%d+)")) or 0) + steps) .. ".0.0"
 end
 local V_LATEST, V_NEXT, V_INSTALLED = aheadBy(2), aheadBy(1), mdwui.version
-local FEED = table.concat({
-  "# Changelog",
-  "",
-  "## Unreleased",
-  "### Added",
-  "- Work that is in no release yet",
-  "",
-  "## " .. V_LATEST .. " - 2026-09-01",
-  "### Added",
-  "- A **big** new thing with `code` in it",
-  "### Fixed",
-  "- A bug",
-  "",
-  "## " .. V_NEXT .. " - 2026-08-22",
-  "### Added",
-  "- Something else",
-  "",
-  "## " .. V_INSTALLED .. " - 2026-08-01",
-  "### Added",
-  "- The first release",
-  "",
-}, "\n")
-
-local releases = mdwui.parseChangelog(FEED)
-check(#releases == 3 and releases[1].version == V_LATEST and releases[1].date == "2026-09-01"
-  and releases[3].version == V_INSTALLED, "the changelog parser reads releases newest-first, with dates")
--- The Unreleased section is work that is in NO release: offering it as one
--- would point the installer at a tag that does not exist.
-local sawUnreleased, allNotes = false, ""
-for _, release in ipairs(releases) do
-  if not release.version:find("^%d") then sawUnreleased = true end
-  for _, note in ipairs(release.notes) do allNotes = allNotes .. note.text .. "\n" end
+-- The feed is the game server's releases.json, newest entry first - the same
+-- shape the mapper package ships against. It is JSON now, not the changelog:
+-- the server copies releases/releases.json out of this repo on every push to
+-- main, so the file the player reads is generated, never hand-edited.
+local function feedJson(entries)
+  local out = {}
+  for _, e in ipairs(entries) do
+    local changes = {}
+    for _, c in ipairs(e[3]) do changes[#changes + 1] = '"' .. c .. '"' end
+    out[#out + 1] = string.format('{"version":"%s","released":"%s","changes":[%s]}',
+      e[1], e[2], table.concat(changes, ","))
+  end
+  return "[" .. table.concat(out, ",") .. "]"
 end
-check(not sawUnreleased, "## Unreleased is never read as a release (the heading's digit class)")
-check(allNotes:find("in no release yet", 1, true) == nil,
-  "and its own notes are not swept into the release below it")
-check(releases[1].notes[1].kind == "head" and releases[1].notes[1].text == "Added"
-  and releases[1].notes[2].kind == "bullet"
-  and releases[1].notes[2].text == "A big new thing with code in it",
-  "sub-headings and bullets are labelled, and inline markdown is stripped from the text")
+local FEED = feedJson({
+  { V_LATEST, "2026-09-01", { "A **big** new thing with `code` in it", "A bug" } },
+  { V_NEXT, "2026-08-22", { "Something else" } },
+  { V_INSTALLED, "2026-08-01", { "The first release" } },
+})
+
+local releases = mdwui.parseReleases(FEED)
+check(#releases == 3 and releases[1].version == V_LATEST and releases[1].date == "2026-09-01"
+  and releases[3].version == V_INSTALLED, "the feed parser reads releases newest-first, with dates")
+check(releases[1].notes[1].kind == "bullet"
+  and releases[1].notes[1].text == "A big new thing with code in it",
+  "changes become bullets, and inline markdown is stripped from the text")
+-- Remote text arrives from a server that could be having a bad day. Every one
+-- of these is skipped rather than thrown: an error inside the download handler
+-- would cost the player the update path entirely.
+check(#mdwui.parseReleases("") == 0, "an empty feed parses as no releases")
+check(#mdwui.parseReleases("<html>404</html>") == 0, "an error page parses as no releases")
+check(#mdwui.parseReleases('{"version":"9.0.0"}') == 0, "a feed that is not an array is refused")
+check(#mdwui.parseReleases('[{"released":"2026-01-01","changes":["x"]}]') == 0,
+  "an entry with no version is skipped")
+check(#mdwui.parseReleases('[{"version":"9.9.9"}]') == 1,
+  "an entry with no changes is still a release")
+local odd = mdwui.parseReleases('[{"version":"9.9.9","released":7,"changes":"nope"}]')
+check(#odd == 1 and odd[1].date == nil and #odd[1].notes == 0,
+  "wrong-typed fields are dropped, not trusted")
 check(#mdwui.newerReleases(releases, V_LATEST) == 0, "nothing in the feed outranks the newest release")
 check(#mdwui.newerReleases(releases, V_INSTALLED) == 2,
   "two releases are newer than the installed one (the same comparator, asked twice)")
 
 -- One check per SESSION, not per build: buildUI has run many times by now.
-check(#H.downloads == 1 and H.downloads[1].url == mdwui.changelogUrl,
-  "the automatic check asked for the changelog once, at the session's first build")
+check(#H.downloads == 1 and H.downloads[1].url == mdwui.releasesUrl,
+  "the automatic check asked the server for releases.json once, at the first build")
 local feedPath = H.downloads[1].path
 local function writeFile(path, text)
   local fh = assert(io.open(path, "wb"))
@@ -1576,8 +1575,7 @@ check(installLink ~= nil, "the offer ends in a clickable install line")
 
 -- Silence is the automatic check's default: only `ui update` answers when
 -- there is nothing to install.
-local SAME_FEED = "# Changelog\n\n## Unreleased\n### Fixed\n- pending\n\n## " .. mdwui.version
-  .. " - 2026-08-01\n### Added\n- The first release\n"
+local SAME_FEED = feedJson({ { mdwui.version, "2026-08-01", { "The first release" } } })
 mdwui.checkForUpdate(false)
 check(feed(SAME_FEED) == "", "an automatic check with nothing to offer prints nothing at all")
 check(uiRun("update"):find("Checking for a newer", 1, true) ~= nil,
@@ -1587,15 +1585,14 @@ check(uiRun("update"):find("already running", 1, true) ~= nil,
 check(feed(SAME_FEED):find("You are on the latest version (" .. mdwui.version .. ")", 1, true) ~= nil,
   "and ui update answers when the installed version is the latest")
 
--- Back to an update pending, then take it. The asset URL is CONVENTION -
--- tag v<version>, asset named after the package - so a feed that lies about
--- a URL has no URL to lie with.
+-- Back to an update pending, then take it. The download URL is FIXED - the
+-- server keeps one copy at one path - so a feed cannot point the installer
+-- anywhere, and the version it named cannot disagree with what arrives.
 feed(FEED)
 uiLink("[Install update now]").cb()
 local assetUrl = H.downloads[#H.downloads].url
-check(assetUrl == "https://github.com/" .. mdwui.repoSlug
-  .. "/releases/download/v" .. V_LATEST .. "/" .. mdwui.packageName .. ".mpackage",
-  "the install link downloads the release asset built from the tag/name contract")
+check(assetUrl == mdwui.packageUrl,
+  "the install link downloads the package the server hosts, at its fixed path")
 
 -- A GitHub error page is not a package: verification runs BEFORE anything is
 -- uninstalled, because the running UI is the only copy the player has.
@@ -1688,15 +1685,15 @@ check(#H.downloads == downloadsBeforeSwap, "the rebuild after the swap does not 
 check(uiRun("update install"):find("No update is pending", 1, true) ~= nil,
   "with the offer spent, a typed install asks for a check first instead of re-downloading it")
 
--- A changelog with a release's worth of notes is capped, with a pointer to
--- the rest: the offer must not scroll the session away.
-local big = { "## " .. aheadBy(3) .. " - 2026-12-31", "### Added" }
-for i = 1, 60 do big[#big + 1] = "- Change number " .. i end
+-- A release with a hundred notes is capped, and says how many it held back:
+-- the offer must not scroll the session away.
+local big = {}
+for i = 1, 60 do big[#big + 1] = "Change number " .. i end
 mdwui.checkForUpdate(false)
-local capped = feed(table.concat(big, "\n"))
+local capped = feed(feedJson({ { aheadBy(3), "2026-12-31", big } }))
 local printedBullets = select(2, capped:gsub("Change number", ""))
-check(printedBullets <= 40 and capped:find("more lines - see the changelog", 1, true) ~= nil,
-  "a long changelog is capped at 40 lines and says how many it held back")
+check(printedBullets <= 40 and capped:find("more lines not shown", 1, true) ~= nil,
+  "a long release note list is capped at 40 lines and says how many it held back")
 
 -- The verb and its overview row, the rule for every player-facing toggle.
 check(uiRun("help update"):find("ui update", 1, true) ~= nil, "ui help update explains the verb")
