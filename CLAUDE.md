@@ -138,6 +138,13 @@ lua5.1 tests/smoke.lua                      # from repo root; needs ../mdw
 muddle                                      # builds build/WillowdaleMudletUI.mpackage
 ```
 
+`src/resources/` ships verbatim into the package ROOT, and the mfile `icon`
+names a file in there which muddler ALSO copies to `.mudlet/Icon/` - so the
+icon is stored twice and its bytes count twice against every self-update
+download. Keep it small for that reason. The bundled font is available, not
+applied: MDW's font settings are sizes only, so nothing selects a family, and
+shipping the TTF is what lets a player pick the web client's face by name.
+
 The smoke suite runs the real MDW + this package against `tests/stub_mudlet.lua`
 (a headless Mudlet API) and fixture GMCP payloads. Add a check for every
 behavior change; if new code uses a Mudlet API the stub lacks, extend the stub.
