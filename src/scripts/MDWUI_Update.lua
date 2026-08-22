@@ -770,12 +770,19 @@ function mdwui.onInstallPackage(_, package)
     os.remove(mdwui.state.updateFile)
     mdwui.state.updateFile = nil
   end
-  -- Nothing here rebuilds the UI. MDW does it, on this same event: it watches
-  -- sysInstallPackage, and for a registered game package re-runs its onReady
-  -- once Mudlet reports the install finished. That is the first moment the old
-  -- copy's creations have been reaped and the new copy's registration is
-  -- seeded again - which is why this used to be a one-second timer here, and
-  -- why a timer was the wrong answer. MDW 0.6.4 and newer.
+  -- By now the UI should be back twice over: Mudlet ran the new scripts and
+  -- their late-join rebuilt through mdw.runReadyCallbacks, and MDW 0.6.4+
+  -- re-asserts a registered game package's onReady on this same event.
+  --
+  -- A live client still came back with nothing, every time the update also
+  -- replaced MDW. So do not assume - ASK. This is a condition, not a delay:
+  -- either the widgets are there or they are not, and it is knowable right
+  -- here. If they are not, do the one thing that demonstrably works, which is
+  -- what a player has been typing by hand: `ui rebuild`, a full MDW setup.
+  if not (mdw.widgets and mdw.widgets["Comm"]) and mdw.rebuild then
+    mdwui.sayTopic("The interface did not come back on its own - rebuilding it.")
+    mdw.rebuild()
+  end
   --
   -- This package can be installed into a profile that has no MDW at all, and
   -- this event is the first moment it can find out. Deferred by a tick, since

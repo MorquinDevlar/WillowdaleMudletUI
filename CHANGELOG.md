@@ -22,6 +22,11 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- If the interface does not come back after an update, the UI now notices and
+  rebuilds it, instead of leaving you to type `ui rebuild`. It says so when it
+  happens.
+
 ## 0.1.18 - 2026-08-22
 
 ### Fixed

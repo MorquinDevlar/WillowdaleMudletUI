@@ -1842,6 +1842,20 @@ raiseEvent("sysInstallPackage", mdwui.packageName)
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
   "and the install event brings the UI back, without a timer anywhere")
 
+-- And if even that leaves nothing - which a live client kept hitting whenever
+-- the update also replaced MDW - the swap checks and falls back to a full MDW
+-- setup, the thing a player was having to type by hand. A condition, not a
+-- delay: the widgets are either there or they are not, and it is knowable.
+mdw.onReady[mdwui.packageName] = function() end -- a build that produces nothing
+mdw.cleanupGame(mdwui.packageName)
+mdw.onReady[mdwui.packageName] = function() end
+H.main._echoed = {}
+raiseEvent("sysInstallPackage", mdwui.packageName)
+check(table.concat(H.main._echoed):find("did not come back on its own", 1, true) ~= nil,
+  "a swap that leaves no widgets says so and rebuilds rather than going quiet")
+H.onInstallScripts()
+mdw.runReadyCallbacks(mdwui.packageName)
+
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
   "the swapped-in package rebuilt the whole UI from its seeds")
 check(#H.downloads == downloadsBeforeSwap, "the rebuild after the swap does not re-check the feed")
