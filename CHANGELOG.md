@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- Widget sizes survive an update. Tearing the UI down was overwriting your
+  saved layout as it went, so a group could come back collapsed - the Equipment
+  group in particular - and stay that way. Needs MDW 0.6.7, which the UI
+  fetches for you.
+
 ## 0.1.21 - 2026-08-22
 
 ### Fixed
