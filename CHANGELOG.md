@@ -22,6 +22,11 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- Needs MDW 0.6.8, which the UI fetches for you. It stops the layout being
+  rewritten dozens of times while the interface is built or taken apart, which
+  is what left widget sizes wrong after an update.
+
 ## 0.1.22 - 2026-08-22
 
 ### Fixed
