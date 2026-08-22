@@ -22,6 +22,9 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- Needs MDW 0.6.5, which the UI fetches for you before it updates itself.
+
 ## 0.1.19 - 2026-08-22
 
 ### Fixed
