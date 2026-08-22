@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.22 - 2026-08-22
+
 ### Fixed
 - Widget sizes survive an update. Tearing the UI down was overwriting your
   saved layout as it went, so a group could come back collapsed - the Equipment
