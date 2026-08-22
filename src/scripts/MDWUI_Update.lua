@@ -774,13 +774,21 @@ function mdwui.onInstallPackage(_, package)
   -- their late-join rebuilt through mdw.runReadyCallbacks, and MDW 0.6.4+
   -- re-asserts a registered game package's onReady on this same event.
   --
-  -- A live client still came back with nothing, every time the update also
-  -- replaced MDW. So do not assume - ASK. This is a condition, not a delay:
-  -- either the widgets are there or they are not, and it is knowable right
-  -- here. If they are not, do the one thing that demonstrably works, which is
-  -- what a player has been typing by hand: `ui rebuild`, a full MDW setup.
-  if not (mdw.widgets and mdw.widgets["Comm"]) and mdw.rebuild then
-    mdwui.sayTopic("The interface did not come back on its own - rebuilding it.")
+  -- Neither is enough. A live client came back with its header, top bar and
+  -- prompt gauges - and empty docks - every time the update also replaced MDW.
+  --
+  -- Nor can the half-state be DETECTED from here: the previous attempt asked
+  -- whether mdw.widgets["Comm"] existed, and it did. The registry entry is
+  -- there while the widget is not on screen, so the check passed and said
+  -- nothing while the player looked at an empty dock.
+  --
+  -- So stop trying to be clever about it and always do the thing that works,
+  -- which is what the player has been typing by hand every single time:
+  -- mdw.rebuild, a full MDW setup. It is idempotent, it costs a fraction of a
+  -- second, and it is the only sequence observed to produce a whole UI after a
+  -- swap. It also puts MDW's own build messages back on screen, so an update
+  -- visibly finishes rather than going quiet.
+  if mdw.rebuild then
     mdw.rebuild()
   end
   --

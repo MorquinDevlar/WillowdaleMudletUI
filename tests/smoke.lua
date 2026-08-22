@@ -39,6 +39,11 @@ local function findByHint(console, pattern)
   return nil
 end
 
+-- Counts real MDW setups, so a test can SEE a rebuild happen rather than infer
+-- it from side effects. Wrapped after MDW loads, restored by nothing - it only
+-- ever adds a counter.
+SETUPS = 0
+
 -- 1. The HARD install path on purpose: MDW boots alone first (demo widgets
 -- and all), then this package installs into the live session. That exercises
 -- the late-join build, the demo-widget takeover, and the live config apply.
@@ -46,6 +51,10 @@ end
 -- which re-runs the registration through a full setup.
 for _, name in ipairs(MDW_ORDER) do
   assert(pcall(dofile, MDW_SRC .. name .. ".lua"), "failed loading " .. name)
+end
+do
+  local realSetup = mdw.setup
+  mdw.setup = function(...) SETUPS = SETUPS + 1 return realSetup(...) end
 end
 raiseEvent("sysLoadEvent")
 H.flushTimers()
@@ -1835,26 +1844,20 @@ check(io.exists(swapPath) == false, "and the temp package file is cleaned up aft
 -- itself rather than leaving a player to work it out.
 mdw.cleanupGame(mdwui.packageName) -- exactly what reaps a stamped owner's things
 check(mdw.widgets["Journal"] == nil, "a late reap can still take the fresh widgets")
--- MDW puts it right on the install EVENT, with nothing timed: it re-runs a
--- registered game package's onReady when Mudlet reports the install finished.
+-- The swap ends in a full MDW setup, always. The half-state cannot be detected
+-- from here: a live client had mdw.widgets["Comm"] present while the docks were
+-- empty, so a check on the registry passed and said nothing while the player
+-- looked at an empty sidebar. Unconditional for that reason - it is idempotent,
+-- it is what a player was typing by hand every time, and it is the only
+-- sequence observed to produce a whole UI after a swap.
 H.onInstallScripts() -- the new copy's scripts re-seed the registration
+local setupsBefore = SETUPS
 raiseEvent("sysInstallPackage", mdwui.packageName)
+check(SETUPS > setupsBefore,
+  "the swap always runs a full MDW setup, whatever the registry says")
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
-  "and the install event brings the UI back, without a timer anywhere")
+  "so the UI is whole afterwards, with nothing timed and nothing guessed")
 
--- And if even that leaves nothing - which a live client kept hitting whenever
--- the update also replaced MDW - the swap checks and falls back to a full MDW
--- setup, the thing a player was having to type by hand. A condition, not a
--- delay: the widgets are either there or they are not, and it is knowable.
-mdw.onReady[mdwui.packageName] = function() end -- a build that produces nothing
-mdw.cleanupGame(mdwui.packageName)
-mdw.onReady[mdwui.packageName] = function() end
-H.main._echoed = {}
-raiseEvent("sysInstallPackage", mdwui.packageName)
-check(table.concat(H.main._echoed):find("did not come back on its own", 1, true) ~= nil,
-  "a swap that leaves no widgets says so and rebuilds rather than going quiet")
-H.onInstallScripts()
-mdw.runReadyCallbacks(mdwui.packageName)
 
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
   "the swapped-in package rebuilt the whole UI from its seeds")

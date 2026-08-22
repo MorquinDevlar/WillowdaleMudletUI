@@ -22,6 +22,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- The interface comes back after an update that also replaces MDW. It was
+  returning with the header, top bar and prompt gauges but empty sidebars, and
+  only `ui rebuild` brought the widgets back - the UI now does that itself, as
+  the last step of every update.
+
 ## 0.1.20 - 2026-08-22
 
 ### Changed
