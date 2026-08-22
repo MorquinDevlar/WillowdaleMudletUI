@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.23 - 2026-08-22
+
 ### Changed
 - Needs MDW 0.6.8, which the UI fetches for you. It stops the layout being
   rewritten dozens of times while the interface is built or taken apart, which
