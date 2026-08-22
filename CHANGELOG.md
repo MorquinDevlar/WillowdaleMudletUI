@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.1.21 - 2026-08-22
+
 ### Fixed
 - The interface comes back after an update that also replaces MDW. It was
   returning with the header, top bar and prompt gauges but empty sidebars, and
