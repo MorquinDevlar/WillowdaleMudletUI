@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.2.1 - 2026-08-23
+
 ### Changed
 - The update offer has room to breathe: blank lines above it, below it, and
   between the changes and the install line, so it no longer runs straight on
