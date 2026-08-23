@@ -39,9 +39,17 @@
 -- so the in-flight guard is a TIMESTAMP: Mudlet raises neither sysDownloadDone
 -- nor sysDownloadError in every failure mode, and a boolean would never clear.
 local STALE_SECONDS = 60
--- Enough of a session's screen for two or three releases' notes; the rest is
--- one summary line pointing at the changelog.
-local MAX_NOTE_LINES = 40
+-- An offer is an INTERRUPTION, not a reading room: it shows the newest
+-- release's notes and nothing else. A player twenty releases behind was
+-- getting forty lines and a "(93 more lines)" apology printed across their
+-- login - the one stretch of a session that cannot be skimmed. `ui update
+-- notes` is where the full history lives, for whoever asks for it.
+local MAX_OFFER_LINES = 12
+local MAX_NOTES_LINES = 400
+-- After the player reaches the game, not before: long enough that the game's
+-- own login block - the latest-change note, the inbox line, the room - has
+-- finished printing, so an offer appears under it rather than through it.
+local AFTER_LOGIN_SECONDS = 10
 -- Smaller than any build this package has ever produced, so a 404 page or a
 -- truncated transfer fails the check without a checksum to maintain.
 local MIN_PACKAGE_BYTES = 20000
@@ -173,13 +181,18 @@ end
 -- PRESENTATION
 ---------------------------------------------------------------------------
 
---- Every newer release's notes as ready-to-echo lines, so the cap below can
--- count them before any of them is printed.
-local function noteLines(newer)
+--- Every listed release's notes as ready-to-echo lines, so the caps above can
+-- count them before any of them is printed. `headings` puts each release's
+-- version and date at the top of its block: the full history needs them to
+-- separate one release from the next, while the offer prints the same pair in
+-- its own first line and would only be repeating itself.
+local function noteLines(list, headings)
   local out = {}
-  for _, release in ipairs(newer) do
-    out[#out + 1] = string.format("  <%s>%s%s", P.head, plain(release.version),
-      release.date and string.format(" <%s>- %s", P.dim, plain(release.date)) or "")
+  for _, release in ipairs(list) do
+    if headings then
+      out[#out + 1] = string.format("  <%s>%s%s", P.head, plain(release.version),
+        release.date and string.format(" <%s>- %s", P.dim, plain(release.date)) or "")
+    end
     for _, note in ipairs(release.notes) do
       if note.kind == "head" then
         out[#out + 1] = string.format("    <%s>%s", P.label, plain(note.text))
@@ -196,23 +209,27 @@ local function noteLines(newer)
   return out
 end
 
---- The whole offer: what is installed, what is on offer, why, and one click
--- that takes it. Every version newer than the installed one is shown, not
--- just the newest - a player two releases behind wants to know what both
--- of them changed.
+--- The offer: what is installed, what is on offer, and one click that takes
+-- it. Only the NEWEST release's notes, however far behind the player is -
+-- "should I take this?" is answered by what the top of the feed changed, and
+-- the answer has to fit on a screen someone is trying to play on. Everything
+-- else is one line pointing at `ui update notes`, which prints the lot.
 local function announce(newer)
   local latest = newer[1]
   mdwui.say(string.format("%s <%s>%s <%s>-> <%s>%s%s", mdwui.packageName,
     P.name, mdwui.version, P.text, P.good, plain(latest.version),
     latest.date and string.format(" <%s>(%s)", P.dim, plain(latest.date)) or ""))
-  local lines = noteLines(newer)
-  for i = 1, math.min(#lines, MAX_NOTE_LINES) do
+  local lines = noteLines({ latest }, false)
+  for i = 1, math.min(#lines, MAX_OFFER_LINES) do
     line(lines[i])
   end
-  if #lines > MAX_NOTE_LINES then
-    -- No "see the changelog": the feed IS the notes now, and releases.json
-    -- is not something a player can usefully be sent to read.
-    line(string.format("  <%s>(%d more lines not shown)", P.dim, #lines - MAX_NOTE_LINES))
+  local behind = #newer - 1
+  if behind > 0 then
+    line(string.format("  <%s>and %d earlier release%s - type ui update notes for every change",
+      P.dim, behind, behind == 1 and "" or "s"))
+  elseif #lines > MAX_OFFER_LINES then
+    line(string.format("  <%s>(%d more lines - type ui update notes)",
+      P.dim, #lines - MAX_OFFER_LINES))
   end
   if cechoLink then
     -- A client action, not a game command: the outbound rule (widget
@@ -226,6 +243,26 @@ local function announce(newer)
     line(string.format("   <%s>or type: ui update install", P.dim))
   else
     line(string.format("  <%s>Type ui update install to take it.", P.dim))
+  end
+end
+
+--- Every newer release in full: the reading room the offer is not. It prints
+-- what the last check already parsed rather than fetching again - the offer
+-- that sent the player here came off that same list seconds ago, and a second
+-- download to re-read it would be a request the server did not need.
+function mdwui.showUpdateNotes()
+  local newer = mdwui.state.updateNewer
+  if not newer or #newer == 0 then
+    mdwui.say("Nothing to read - run ui update first.")
+    return
+  end
+  mdwui.sayTopic(string.format("Every change since %s:", mdwui.version))
+  local lines = noteLines(newer, true)
+  for i = 1, math.min(#lines, MAX_NOTES_LINES) do
+    line(lines[i])
+  end
+  if #lines > MAX_NOTES_LINES then
+    line(string.format("  <%s>(%d more lines not shown)", P.dim, #lines - MAX_NOTES_LINES))
   end
 end
 
@@ -273,14 +310,32 @@ function mdwui.checkForUpdate(manual)
   return true
 end
 
---- The session's one automatic check, called from buildUI. MDW rebuilds the
--- UI on every setup (profile load, MDW update, `ui rebuild`), and the flag
--- lives on mdwui.state, which survives a script re-run - so this is one check
--- per session rather than one per build.
-function mdwui.checkForUpdateOnce()
-  if mdwui.state.updateCheckedThisSession then return end
-  mdwui.state.updateCheckedThisSession = true
-  mdwui.checkForUpdate(false)
+--- The session's one automatic check, armed by the player reaching the game -
+-- the first Char.Info, which the server only sends once a character is
+-- selected.
+--
+-- NOT from buildUI, where it used to live: the UI builds at profile load, so
+-- the offer printed itself over the connection banner, the username prompt
+-- and the character list - hijacking the exact stretch of a session a player
+-- has to read. Everything downstream of this waits for a timer, so nothing
+-- can reach the screen before the game does.
+--
+-- The flags live on mdwui.state, which survives a script re-run, so the
+-- rebuilds MDW triggers cannot turn this into a check per build. The armed
+-- marker is a TIMESTAMP for the same reason the in-flight guard is one: MDW's
+-- teardown kills our timers, so an armed check can vanish without ever
+-- running, and a stale marker lets the next Char.Info arm a fresh one instead
+-- of the session losing its only check.
+function mdwui.scheduleUpdateCheck()
+  if mdwui.state.updateCheckedThisSession or not tempTimer then return end
+  local armed = mdwui.state.updateCheckArmedAt
+  if armed and (os.time() - armed) < AFTER_LOGIN_SECONDS * 2 then return end
+  mdwui.state.updateCheckArmedAt = os.time()
+  mdwui.addTimer(tempTimer(AFTER_LOGIN_SECONDS, function()
+    if mdwui.state.updateCheckedThisSession then return end
+    mdwui.state.updateCheckedThisSession = true
+    mdwui.checkForUpdate(false)
+  end))
 end
 
 --- The release feed landed: compare, and either offer the update or say nothing.
@@ -294,6 +349,9 @@ local function readFeed(path)
     return
   end
   local newer = mdwui.newerReleases(mdwui.parseReleases(text), mdwui.version)
+  -- Kept for `ui update notes`, and cleared when there is nothing on offer:
+  -- a list left over from before an install would read as current.
+  mdwui.state.updateNewer = (#newer > 0) and newer or nil
   if #newer == 0 then
     if manual then
       mdwui.say(string.format("You are on the latest version (%s).", mdwui.version))

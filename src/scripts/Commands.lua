@@ -1307,10 +1307,12 @@ COMMANDS = {
     end },
 
   { name = "update",
-    usage = "ui update [install]",
+    usage = "ui update [install|notes]",
     help = "Check GitHub for a newer Willowdale UI and offer to install it. The UI checks once "
-      .. "on its own when it builds; nothing is downloaded until you ask. `ui update install` "
-      .. "takes the offer from the keyboard, for anyone who cannot click its link.",
+      .. "on its own, a few seconds after you enter the game; nothing is downloaded until you "
+      .. "ask. An offer shows only the newest release's changes - `ui update notes` prints every "
+      .. "change since the version you have. `ui update install` takes the offer from the "
+      .. "keyboard, for anyone who cannot click its link.",
     run = function(words)
       local arg = words[2]
       if not arg then
@@ -1321,8 +1323,10 @@ COMMANDS = {
       -- works the way `ui sh que` does.
       if ("install"):find(arg:lower(), 1, true) == 1 then
         mdwui.installUpdate()
+      elseif ("notes"):find(arg:lower(), 1, true) == 1 then
+        mdwui.showUpdateNotes()
       else
-        mdwui.say("Say install, or nothing at all - not '" .. plain(arg) .. "'.")
+        mdwui.say("Say install or notes, or nothing at all - not '" .. plain(arg) .. "'.")
       end
     end },
 
@@ -1563,7 +1567,8 @@ local OVERVIEW = {
     { cmd = "rebuild", link = "rebuild", opts = "rebuild the UI in place" },
     -- The value is the version the row would replace, which is the one thing
     -- a player wants to see before asking GitHub anything.
-    { cmd = "update", link = "update", opts = "[install]   check GitHub for a newer UI, or take the offer",
+    { cmd = "update", link = "update",
+      opts = "[install|notes]   check GitHub for a newer UI, take the offer, or read every change",
       value = function() return tostring(mdwui.version) end },
     { cmd = "help", link = "help", opts = "<command>   what one command does" },
   } },

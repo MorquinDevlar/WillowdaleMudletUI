@@ -280,10 +280,14 @@ mdwui.state = mdwui.state or {
   -- the download in flight - a timestamp, so a stalled one goes stale),
   -- updateFeedPath / updateFile / updateUrl (what we asked for, matched
   -- against sysDownloadDone's path), updateVersion (the release on offer),
-  -- updateManual (`ui update` speaks even with nothing to say; the session
-  -- check does not), updateCheckedThisSession, and updateInstalled - the
-  -- all-clear the watchdog reads, which only works because this table
-  -- survives the package swap in the Lua state.
+  -- updateNewer (the releases the last check found newer, kept for `ui update
+  -- notes` so reading them costs no second download), updateManual (`ui
+  -- update` speaks even with nothing to say; the session check does not),
+  -- updateCheckArmedAt (os.time() the session check was armed at the first
+  -- Char.Info - a timestamp, because an MDW teardown can kill the timer
+  -- before it fires and a stale one has to re-arm), updateCheckedThisSession,
+  -- and updateInstalled - the all-clear the watchdog reads, which only works
+  -- because this table survives the package swap in the Lua state.
   -- MDW bootstrap keys (Update, runtime): mdwFile (the download in
   -- flight, matched against sysDownloadDone's path) and mdwFetchedFor - the
   -- minMdwVersion the last bootstrap attempt was made for, so a dead network

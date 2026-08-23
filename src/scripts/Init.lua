@@ -323,12 +323,6 @@ function mdwui.buildUI()
   -- Guarded like every cross-module call at build time; one line, once per
   -- session (announceCommands remembers).
   if mdwui.announceCommands then mdwui.announceCommands() end
-  -- The session's only automatic update check (Update remembers it
-  -- ran, so the rebuilds MDW triggers do not re-check). Nothing is printed
-  -- unless a newer release exists, and nothing is downloaded but the
-  -- changelog until the player says so.
-  mdwui.checkForUpdateOnce()
-
   -- Top chrome bar: session/identity/version strip. Unguarded - the version
   -- gate at the top of buildUI guarantees the MDW 0.4 createBar API. loginAt
   -- starts the connection timer, and is seeded here as a fallback for
@@ -373,6 +367,15 @@ local handlers = {
     mdwui.onCharName(mdwui.tbl(gmcp.Char and gmcp.Char.Info).name)
     mdwui.renderCharacter()
     mdwui.renderTopBar()
+    -- The session's only automatic update check, and this is the earliest
+    -- honest signal that the player is IN the game: Char.Info arrives once a
+    -- character is selected, never during login. It arms a timer rather than
+    -- checking here, so the offer lands after the game's own login block
+    -- (see scheduleUpdateCheck), and it remembers it ran - so neither the
+    -- rebuilds MDW triggers nor a later Char.Info push re-checks. Nothing is
+    -- printed unless a newer release exists, and nothing but the release
+    -- feed is downloaded until the player says so.
+    mdwui.scheduleUpdateCheck()
   end,
   ["gmcp.Char.Attributes"] = function() mdwui.renderCharacter() end,
   ["gmcp.Char.Worth"] = function() mdwui.renderCharacter() end,

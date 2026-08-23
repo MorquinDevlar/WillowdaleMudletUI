@@ -1614,10 +1614,40 @@ check(#mdwui.newerReleases(releases, V_LATEST) == 0, "nothing in the feed outran
 check(#mdwui.newerReleases(releases, V_INSTALLED) == 2,
   "two releases are newer than the installed one (the same comparator, asked twice)")
 
--- One check per SESSION, not per build: buildUI has run many times by now.
-check(#H.downloads == 1 and H.downloads[1].url == mdwui.releasesUrl,
-  "the automatic check asked the server for releases.json once, at the first build")
-local feedPath = H.downloads[1].path
+-- WHEN the automatic check happens is the whole point of it. A build is
+-- profile load, which on a live client is the connection banner, the username
+-- prompt and the character list - so a check armed there printed its offer
+-- straight through the one stretch of a session a player has to read. The
+-- trigger is the first Char.Info instead (the server sends it once a
+-- character is selected), and even that only ARMS a timer, so the game's own
+-- login block finishes before anything of ours appears under it.
+local downloadsBefore = #H.downloads
+-- Back to a session that has not checked yet. updateBusyAt goes with the two
+-- flags: the build-time check this suite has already driven is still counted
+-- as in flight (its feed arrives further down), and the in-flight guard would
+-- refuse everything below on that alone.
+mdwui.state.updateCheckedThisSession, mdwui.state.updateCheckArmedAt = nil, nil
+mdwui.state.updateBusyAt = nil
+mdwui.buildUI()
+H.flushTimers()
+check(#H.downloads == downloadsBefore, "building the UI asks the server for nothing at all")
+raiseEvent("gmcp.Char.Info")
+check(#H.downloads == downloadsBefore,
+  "and reaching the game only arms the check - it does not print over the login")
+H.flushTimers()
+check(#H.downloads == downloadsBefore + 1
+  and H.downloads[#H.downloads].url == mdwui.releasesUrl,
+  "the armed check then asks the server for releases.json")
+-- One check per SESSION, not per Char.Info: the server pushes it again on a
+-- level, a class change and every full-payload refresh.
+raiseEvent("gmcp.Char.Info")
+H.flushTimers()
+check(#H.downloads == downloadsBefore + 1, "later Char.Info pushes do not re-check")
+-- And a rebuild does not either - MDW runs buildUI on every setup.
+mdwui.buildUI()
+H.flushTimers()
+check(#H.downloads == downloadsBefore + 1, "nor does a rebuild")
+local feedPath = H.downloads[#H.downloads].path
 local function writeFile(path, text)
   local fh = assert(io.open(path, "wb"))
   fh:write(text)
@@ -1643,8 +1673,19 @@ check(offer:find(mdwui.packageName, 1, true) ~= nil and offer:find(V_INSTALLED, 
   and offer:find("->", 1, true) ~= nil and offer:find(V_LATEST, 1, true) ~= nil,
   "the offer names the package, the installed version and the one available")
 check(offer:find("2026-09-01", 1, true) ~= nil, "with the release date")
-check(offer:find("A big new thing", 1, true) ~= nil and offer:find("Something else", 1, true) ~= nil,
-  "and the notes of EVERY newer release, not just the newest")
+-- Only the NEWEST release's notes, however far behind the player is. Showing
+-- every one of them is what turned an offer into a wall of changelog across
+-- someone's login; the rest is one line pointing at `ui update notes`.
+check(offer:find("A big new thing", 1, true) ~= nil,
+  "and the newest release's notes")
+check(offer:find("Something else", 1, true) == nil,
+  "but NOT the notes of every older release behind it")
+check(offer:find("and 1 earlier release", 1, true) ~= nil,
+  "which is counted instead, with a pointer to the full list")
+-- The offer prints the version and date in its own first line, so the notes
+-- under it do not repeat the pair as a heading.
+local _, headings = offer:gsub(V_LATEST, "")
+check(headings == 1, "the newest version is named once, not once more as a heading")
 check(offer:find("**", 1, true) == nil and offer:find("`", 1, true) == nil,
   "no raw markdown reaches the console")
 -- Remote text: a bullet reading "<b>" must print, not paint.
@@ -1656,6 +1697,34 @@ check(injected:find("bold", 1, true) ~= nil and injected:find("<b>", 1, true) ==
   "colour markup in the changelog is stripped, not obeyed")
 local installLink = uiLink("[Install update now]")
 check(installLink ~= nil, "the offer ends in a clickable install line")
+
+-- `ui update notes`: the reading room the offer deliberately is not. It reads
+-- the list the check already parsed, so the full history costs no second
+-- download - the offer that sent the player here came off it seconds ago.
+feed(FEED)
+local downloadsBeforeNotes = #H.downloads
+local notes = uiRun("update notes")
+check(#H.downloads == downloadsBeforeNotes, "ui update notes asks the server for nothing")
+check(notes:find("A big new thing", 1, true) ~= nil
+  and notes:find("Something else", 1, true) ~= nil,
+  "and prints every release newer than the installed one, not just the newest")
+check(notes:find(V_LATEST, 1, true) ~= nil and notes:find(V_NEXT, 1, true) ~= nil,
+  "each under its own version heading, which is what separates one from the next")
+check(notes:find("The first release", 1, true) == nil,
+  "and stops at the installed one - its own notes are not news")
+check(notes:find("since " .. V_INSTALLED, 1, true) ~= nil,
+  "the heading names the version being read forward from")
+check(uiRun("update n"):find("A big new thing", 1, true) ~= nil,
+  "prefix-matched like every other word in this surface")
+-- Nothing on offer must clear the list, or one left over from before an
+-- install would read as current.
+mdwui.state.updateBusyAt = nil
+mdwui.checkForUpdate(false)
+feed(feedJson({ { mdwui.version, "2026-08-01", { "The first release" } } }))
+check(uiRun("update notes"):find("run ui update first", 1, true) ~= nil,
+  "and a check that found nothing leaves no stale notes behind")
+check(uiRun("update sideways"):find("install or notes", 1, true) ~= nil,
+  "an unknown word names both options rather than guessing")
 
 -- Silence is the automatic check's default: only `ui update` answers when
 -- there is nothing to install.
@@ -1865,15 +1934,19 @@ check(#H.downloads == downloadsBeforeSwap, "the rebuild after the swap does not 
 check(uiRun("update install"):find("No update is pending", 1, true) ~= nil,
   "with the offer spent, a typed install asks for a check first instead of re-downloading it")
 
--- A release with a hundred notes is capped, and says how many it held back:
--- the offer must not scroll the session away.
+-- One release with sixty notes is capped too: however few releases a player is
+-- behind, an offer must not scroll their session away, and the pointer at the
+-- rest is the same one the earlier-releases line uses.
 local big = {}
 for i = 1, 60 do big[#big + 1] = "Change number " .. i end
+mdwui.state.updateBusyAt = nil
 mdwui.checkForUpdate(false)
 local capped = feed(feedJson({ { aheadBy(3), "2026-12-31", big } }))
 local printedBullets = select(2, capped:gsub("Change number", ""))
-check(printedBullets <= 40 and capped:find("more lines not shown", 1, true) ~= nil,
-  "a long release note list is capped at 40 lines and says how many it held back")
+check(printedBullets <= 12 and capped:find("ui update notes", 1, true) ~= nil,
+  "a long release note list is capped and points at ui update notes for the rest")
+check(select(2, uiRun("update notes"):gsub("Change number", "")) == 60,
+  "which prints all sixty of them")
 
 -- The verb and its overview row, the rule for every player-facing toggle.
 check(uiRun("help update"):find("ui update", 1, true) ~= nil, "ui help update explains the verb")

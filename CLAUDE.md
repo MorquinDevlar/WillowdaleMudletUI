@@ -233,9 +233,29 @@ with a 60s staleness window, never a boolean: Mudlet does not raise
 would wedge the checker for the session. Feed text is REMOTE text and
 goes through `plain()` like anything from the game.
 
-Update checking has deliberately NO periodic timer: once per session from
-`buildUI`, plus on demand via `ui update`. A player who wants a poll can type
-one. The install is reachable BOTH ways - the offer's `[Install update now]`
+Update checking has deliberately NO periodic timer: once per session, plus on
+demand via `ui update`. A player who wants a poll can type one. WHEN that one
+check happens is load-bearing and not obvious: it is armed by the first
+`gmcp.Char.Info` - the earliest honest signal the player is IN the game, since
+the server only sends it once a character is selected - and NOT by `buildUI`,
+where it used to live. A build is profile load, so a check armed there printed
+its offer through the connection banner, the username prompt and the character
+list. Even Char.Info only ARMS it: `mdwui.scheduleUpdateCheck` waits
+`AFTER_LOGIN_SECONDS` so the game's own login block (latest-change note,
+inbox line, room) finishes first. Its armed marker is a TIMESTAMP, like the
+in-flight guard and for the same reason - an MDW teardown kills our timers, so
+an armed check can vanish, and a stale marker lets the next Char.Info arm a
+fresh one rather than the session losing its only check.
+
+The offer is an INTERRUPTION, not a reading room: it shows the NEWEST
+release's notes only, capped, however far behind the player is - "should I
+take this?" is answered by the top of the feed - and counts the rest in one
+line pointing at `ui update notes`, which prints every change since the
+installed version from the list the check already parsed (no second
+download). Showing every newer release is what once put forty lines of
+changelog and a "(93 more lines)" apology across someone's login.
+
+The install is reachable BOTH ways - the offer's `[Install update now]`
 link and `ui update install` - because the link is a mouse affordance and this
 surface is a keyboard one. Installing NEVER happens on its own: the check prints the new
 version and its notes with a link, and only that link installs. The swap

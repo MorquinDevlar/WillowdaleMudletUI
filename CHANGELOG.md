@@ -22,6 +22,15 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- The update offer no longer lands on top of your login. It waits until you
+  are in the game with a character chosen, then a few seconds more, so the
+  connection banner, the username prompt, the character list and the game's
+  own welcome all go past first.
+- An update offer is now a few lines instead of a screenful: the newest
+  release's changes, and a count of the older ones behind it. Type
+  `ui update notes` to read every change since the version you have.
+
 ## 0.1.23 - 2026-08-22
 
 ### Changed
