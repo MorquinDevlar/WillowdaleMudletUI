@@ -22,6 +22,14 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- The update offer has room to breathe: blank lines above it, below it, and
+  between the changes and the install line, so it no longer runs straight on
+  from the room you are standing in.
+- It also opens with a line in magenta saying a new version is ready, so you
+  can tell at a glance what it is before reading any version numbers. Typing
+  `ui update` yourself skips that line - you already know what you asked.
+
 ## 0.2.0 - 2026-08-23
 
 ### Changed

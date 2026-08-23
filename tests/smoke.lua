@@ -1698,6 +1698,42 @@ check(injected:find("bold", 1, true) ~= nil and injected:find("<b>", 1, true) ==
 local installLink = uiLink("[Install update now]")
 check(installLink ~= nil, "the offer ends in a clickable install line")
 
+-- The offer arrives unasked, between a room description and whatever the
+-- player types next, so it needs room around it or it reads as part of one or
+-- the other. A headline says what it is before any numbers, and blank lines
+-- fence the block off - at both ends and between the notes and the call to
+-- action. Asserted on the TEXT, with the colour tags stripped, so the shape of
+-- the block is not pinned to the palette that paints it.
+local plainOffer = (offer:gsub("<[^>]*>", ""))
+check(plainOffer:find("A new " .. mdwui.packageName .. " is ready to install", 1, true) ~= nil,
+  "an unasked-for offer leads with a headline saying what it is")
+check(plainOffer:sub(1, 1) == "\n", "with a blank line above it")
+check(plainOffer:find("\n\n[ UI - " .. mdwui.packageName, 1, true) ~= nil,
+  "another between the headline and the version line")
+check(plainOffer:find("\n\n[Install update now]", 1, true) ~= nil,
+  "another between the notes and the call to action")
+check(plainOffer:sub(-2) == "\n\n", "and one below the whole block")
+-- The headline is the one line here that has to catch an eye already reading
+-- something else. Its TAG must not move with it: the marker a player scans
+-- back for is the same gold on every line the client prints.
+local headline
+for row in offer:gmatch("[^\n]+") do
+  if row:find("A new ", 1, true) then headline = row end
+end
+check(headline ~= nil and headline:find("<magenta>A new ", 1, true) ~= nil,
+  "the headline itself is magenta")
+check(headline ~= nil and headline:find("<gold>[ UI - ", 1, true) == 1,
+  "while its [ UI - ] tag stays gold, like every other line the client prints")
+-- A player who TYPED the question is already looking at the answer: a headline
+-- above it would be a third tagged line and the wall this spacing exists to
+-- break up.
+mdwui.state.updateBusyAt = nil
+uiRun("update")
+local typedOffer = feed(FEED)
+check(typedOffer:find("is ready to install", 1, true) == nil,
+  "but ui update skips the headline - the player is already looking")
+check(typedOffer:find(V_LATEST, 1, true) ~= nil, "and still gets the offer itself")
+
 -- `ui update notes`: the reading room the offer deliberately is not. It reads
 -- the list the check already parsed, so the full history costs no second
 -- download - the offer that sent the player here came off it seconds ago.

@@ -81,6 +81,12 @@ local WATCHDOG_SECONDS = 20
 --- Named Mudlet colours only (verified against color_table in GUIUtils.lua -
 -- a name missing there prints literally).
 local P = {
+  -- The unasked-for headline only. It is the one line here that has to catch
+  -- an eye already reading something else, so it takes a hue nothing else in
+  -- this package uses. The [ UI - ] tag around it stays gold like every other
+  -- line the client prints - the marker a player scans back for must not
+  -- change colour with the message.
+  banner = "magenta",
   head = "cyan",        -- version headings
   label = "gold",       -- the Added/Changed/Fixed sub-headings
   text = "grey",        -- bullets and body text
@@ -214,9 +220,22 @@ end
 -- "should I take this?" is answered by what the top of the feed changed, and
 -- the answer has to fit on a screen someone is trying to play on. Everything
 -- else is one line pointing at `ui update notes`, which prints the lot.
-local function announce(newer)
+local function announce(newer, manual)
   local latest = newer[1]
-  mdwui.say(string.format("%s <%s>%s <%s>-> <%s>%s%s", mdwui.packageName,
+  -- A headline for the check the player did NOT ask for. Arriving unannounced
+  -- in the middle of a room description, the offer has to say what it is
+  -- before it says any numbers - a bare version line reads as one more thing
+  -- the game printed. `ui update` skips it: someone who typed the question is
+  -- already looking at the answer, and a third tagged line above it would be
+  -- the wall this spacing exists to break up.
+  if not manual then
+    mdwui.sayTopic(string.format("<%s>A new %s is ready to install! Here is what it changes:",
+      P.banner, mdwui.packageName))
+  end
+  -- Blank lines around the block, not just above it. The offer lands between a
+  -- room description and whatever the player types next, so without them it
+  -- reads as part of one or the other.
+  mdwui.sayTopic(string.format("%s <%s>%s <%s>-> <%s>%s%s", mdwui.packageName,
     P.name, mdwui.version, P.text, P.good, plain(latest.version),
     latest.date and string.format(" <%s>(%s)", P.dim, plain(latest.date)) or ""))
   local lines = noteLines({ latest }, false)
@@ -231,6 +250,7 @@ local function announce(newer)
     line(string.format("  <%s>(%d more lines - type ui update notes)",
       P.dim, #lines - MAX_OFFER_LINES))
   end
+  line("") -- the call to action stands apart from the notes it follows
   if cechoLink then
     -- A client action, not a game command: the outbound rule (widget
     -- affordances send real commands) has nothing to send here.
@@ -244,6 +264,7 @@ local function announce(newer)
   else
     line(string.format("  <%s>Type ui update install to take it.", P.dim))
   end
+  line("")
 end
 
 --- Every newer release in full: the reading room the offer is not. It prints
@@ -264,6 +285,7 @@ function mdwui.showUpdateNotes()
   if #lines > MAX_NOTES_LINES then
     line(string.format("  <%s>(%d more lines not shown)", P.dim, #lines - MAX_NOTES_LINES))
   end
+  line("")
 end
 
 ---------------------------------------------------------------------------
@@ -360,7 +382,7 @@ local function readFeed(path)
   end
   mdwui.state.updateVersion = newer[1].version
   mdwui.state.updateMdw = newer[1].mdw
-  announce(newer)
+  announce(newer, manual)
 end
 
 ---------------------------------------------------------------------------

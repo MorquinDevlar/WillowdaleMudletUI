@@ -255,6 +255,15 @@ installed version from the list the check already parsed (no second
 download). Showing every newer release is what once put forty lines of
 changelog and a "(93 more lines)" apology across someone's login.
 
+It is also SPACED: blank lines above the block, below it, and between the
+notes and the install line, because it lands between a room description and
+whatever the player types next. The unasked-for check leads with a magenta
+headline saying what it is before any version numbers appear; `ui update`
+skips that line, since someone who typed the question is already looking at
+the answer. The `[ UI - ]` tag around it stays gold either way - the marker a
+player scans back for must never change colour with the message, which is why
+the hue goes on the body and not on `mdwui.say`.
+
 The install is reachable BOTH ways - the offer's `[Install update now]`
 link and `ui update install` - because the link is a mouse affordance and this
 surface is a keyboard one. Installing NEVER happens on its own: the check prints the new
