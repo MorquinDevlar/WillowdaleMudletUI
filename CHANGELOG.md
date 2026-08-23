@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.2.0 - 2026-08-23
+
 ### Changed
 - The update offer no longer lands on top of your login. It waits until you
   are in the game with a character chosen, then a few seconds more, so the
