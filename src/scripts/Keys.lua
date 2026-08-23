@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Keys.lua
+  Keys.lua
   Numpad walking: the package's native key folder and the toggle that arms it.
 
   Numpad walking is the package's own NATIVE key folder (src/keys, named by
@@ -25,7 +25,7 @@
   The `ui numpad` command's binding points are the public functions here:
   mdwui.numpadWalking() / setNumpadWalking(on) / toggleNumpadWalking().
 
-  Dependencies: MDWUI_Config.lua, MDWUI_Core.lua.
+  Dependencies: Config.lua, Core.lua.
 ]]
 
 ---------------------------------------------------------------------------

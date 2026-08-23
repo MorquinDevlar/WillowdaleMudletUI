@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Panels.lua
+  Panels.lua
   Renderers for the list-style panels: Character, Affects, Group, Equipment,
   Inventory, Keyring, and Forage.
 
@@ -11,7 +11,7 @@
 
   Field names come from the GMCP guide (sections 5.3-5.8).
 
-  Dependencies: MDWUI_Config.lua, MDWUI_Core.lua.
+  Dependencies: Config.lua, Core.lua.
 ]]
 
 ---------------------------------------------------------------------------

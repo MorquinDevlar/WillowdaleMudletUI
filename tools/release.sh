@@ -43,7 +43,7 @@ step() {
 # Everything from the bump onwards is undone on failure, so a botched run
 # leaves the tree exactly as clean as it was found.
 restore_and_die() {
-    git checkout -- mfile src/scripts/MDWUI_Config.lua CHANGELOG.md
+    git checkout -- mfile src/scripts/Config.lua CHANGELOG.md
     die "$*"
 }
 
@@ -110,11 +110,11 @@ fi
 step "Bumping version to $version"
 sed "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" mfile >"$tmpdir/mfile"
 mv "$tmpdir/mfile" mfile
-sed "s/^mdwui\.version = \".*\"/mdwui.version = \"$version\"/" src/scripts/MDWUI_Config.lua >"$tmpdir/config.lua"
-mv "$tmpdir/config.lua" src/scripts/MDWUI_Config.lua
+sed "s/^mdwui\.version = \".*\"/mdwui.version = \"$version\"/" src/scripts/Config.lua >"$tmpdir/config.lua"
+mv "$tmpdir/config.lua" src/scripts/Config.lua
 grep -q "\"version\": \"$version\"" mfile || restore_and_die "failed to bump the version in mfile"
-grep -q "^mdwui\.version = \"$version\"$" src/scripts/MDWUI_Config.lua ||
-    restore_and_die "failed to bump mdwui.version in src/scripts/MDWUI_Config.lua"
+grep -q "^mdwui\.version = \"$version\"$" src/scripts/Config.lua ||
+    restore_and_die "failed to bump mdwui.version in src/scripts/Config.lua"
 
 step "Promoting the changelog"
 today=$(date +%F)
@@ -170,7 +170,7 @@ muddle || restore_and_die "muddle build failed"
     restore_and_die "muddle produced no build/WillowdaleMudletUI.mpackage"
 
 step "Committing"
-git add mfile src/scripts/MDWUI_Config.lua CHANGELOG.md
+git add mfile src/scripts/Config.lua CHANGELOG.md
 git commit -m "Release $version"
 
 step "Tagging $tag"

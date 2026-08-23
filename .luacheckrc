@@ -13,7 +13,7 @@ read_globals = {
   "ansi2decho",
   -- Main-console output for the `ui` command (results, listings, and the
   -- overview's clickable command lines). Named colours there, not the
-  -- widgets' decho triplets - see MDWUI_Commands.lua's header.
+  -- widgets' decho triplets - see Commands.lua's header.
   "cecho",
   "cechoLink",
   "echo",
@@ -24,7 +24,7 @@ read_globals = {
   "json_to_value",
   "deleteNamedEventHandler",
   "getMudletHomeDir", "getMainWindowSize",
-  -- The self-updater (MDWUI_Update.lua): Mudlet's asynchronous downloader and
+  -- The self-updater (Update.lua): Mudlet's asynchronous downloader and
   -- the package/module installers. downloadFile is read guarded, the rest are
   -- only ever reached after it answered.
   "downloadFile",

@@ -17,9 +17,9 @@ CRITICAL: Read and follow EVERY instruction in this file exactly. Do not fall ba
 
 ### What the script does
 
-`tools/release.sh X.Y.Z`, in this order: checks its prerequisites (git, gh, lua5.1, muddle, luacheck, an authenticated `gh`), refuses to run off `main`, with a dirty tree, when `main` is behind origin, when the tag or GitHub release already exists, or when `## Unreleased` is empty; bumps `"version"` in `mfile` and `mdwui.version` in `src/scripts/MDWUI_Config.lua`; promotes `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z - <today>` and extracts that body as the release notes; runs `lua5.1 tests/smoke.lua`, luacheck, and `muddle`, and checks that `build/WillowdaleMudletUI.mpackage` exists and is non-empty; commits "Release X.Y.Z"; tags `vX.Y.Z`; pushes `main` and the tag; publishes the GitHub release with the built `.mpackage` attached.
+`tools/release.sh X.Y.Z`, in this order: checks its prerequisites (git, gh, lua5.1, muddle, luacheck, an authenticated `gh`), refuses to run off `main`, with a dirty tree, when `main` is behind origin, when the tag or GitHub release already exists, or when `## Unreleased` is empty; bumps `"version"` in `mfile` and `mdwui.version` in `src/scripts/Config.lua`; promotes `## Unreleased` in `CHANGELOG.md` to `## X.Y.Z - <today>` and extracts that body as the release notes; runs `lua5.1 tests/smoke.lua`, luacheck, and `muddle`, and checks that `build/WillowdaleMudletUI.mpackage` exists and is non-empty; commits "Release X.Y.Z"; tags `vX.Y.Z`; pushes `main` and the tag; publishes the GitHub release with the built `.mpackage` attached.
 
-Anything that fails from the bump onwards restores `mfile`, `src/scripts/MDWUI_Config.lua` and `CHANGELOG.md` and stops, so a failed run leaves the tree as clean as it found it.
+Anything that fails from the bump onwards restores `mfile`, `src/scripts/Config.lua` and `CHANGELOG.md` and stops, so a failed run leaves the tree as clean as it found it.
 
 The tag format `vX.Y.Z` and the asset name `WillowdaleMudletUI.mpackage` are a contract: the package's own updater builds `https://github.com/MorquinDevlar/WillowdaleMudletUI/releases/download/vX.Y.Z/WillowdaleMudletUI.mpackage` out of the version number and reads the notes from `CHANGELOG.md` raw on `main`. Neither may change without breaking every installed client's update path.
 

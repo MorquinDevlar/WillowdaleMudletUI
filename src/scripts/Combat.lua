@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Combat.lua
+  Combat.lua
   The Combat widget (real gauges, status, clickable enemy list), the
   GMCP-driven prompt bar with its gauge layer, and the two vertical-ellipsis
   settings menus (prompt bar + Combat widget), all mirroring the web client.
@@ -8,7 +8,7 @@
   render path must stay cheap: MDW's setWidgetRows diffs rows in place, and
   gauge restyles only happen on band crossings.
 
-  Dependencies: MDWUI_Config.lua, MDWUI_Core.lua.
+  Dependencies: Config.lua, Core.lua.
 ]]
 
 ---------------------------------------------------------------------------

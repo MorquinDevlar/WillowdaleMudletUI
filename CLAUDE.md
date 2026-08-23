@@ -27,7 +27,7 @@ integer division, no 5.2+ stdlib.
 Scripts must NEVER call `mdw.*` functions at load time - only seed tables:
 `mdw = mdw or {}`, `mdw.onReady[mdwui.packageName] = ...`, `mdw.gameConfig`,
 `mdw.loadExamples`. MDW runs the registration on every UI build (install,
-profile load, MDW package updates), and `MDWUI_Init.lua` ends with the
+profile load, MDW package updates), and `Init.lua` ends with the
 late-join call for when this package installs while MDW is already up.
 `mdwui.packageName` must always equal the mfile's "package" value - Mudlet
 reports that name in sysUninstallPackage, and cleanup only fires on a match.
@@ -79,7 +79,7 @@ key-related to collect at teardown or uninstall.
 
 ## Keyboard command surface (`ui`)
 
-`MDWUI_Commands.lua` holds the dispatcher `mdwui.command(line)`; `src/aliases`
+`Commands.lua` holds the dispatcher `mdwui.command(line)`; `src/aliases`
 holds the only shipped alias, a one-line shim into it. The alias and the smoke
 suite both enter through that one function, so a check against
 `mdwui.command` is a check against what the player types. It must
@@ -90,7 +90,7 @@ console - the surface is typed, so its answers belong in the stream the
 player typed into, not in a widget that may be hidden or closed - and it
 speaks
 `cecho`/`cechoLink` with Mudlet's NAMED colours (its local `P` table).
-`MDWUI_Update.lua` is the only other module that does, for the same reason and
+`Update.lua` is the only other module that does, for the same reason and
 with its own `P`; the widget renderers keep `decho` and the RGB palette
 transcribed from the web CSS. Angle-bracket placeholders (`ui show <widget>`) are safe in that output:
 Mudlet prints an unrecognised tag literally, so only `<r> <b> <i> <u> <s> <o>`
@@ -196,8 +196,8 @@ game server's, shared with the mapper package: a JSON array, newest first, of
 `## Unreleased` in the generator exactly as it did in the package's old
 parser - work that is in no release must never be offered as one.
 
-The updater in `MDWUI_Update.lua` therefore reads two fixed URLs
-(`mdwui.releasesUrl`, `mdwui.packageUrl` in `MDWUI_Config.lua`) and constructs
+The updater in `Update.lua` therefore reads two fixed URLs
+(`mdwui.releasesUrl`, `mdwui.packageUrl` in `Config.lua`) and constructs
 neither:
 
 - it fetches `releases.json`, decodes it with `json_to_value` (the same
@@ -252,10 +252,10 @@ Mudlet resolves NO package dependencies - the mfile's `dependencies` field is
 read by the package exporter and by nothing else - so a player who installs
 only this package would meet `buildUI`'s version gate and one line of
 explanation instead of a UI. `mdwui.ensureMdw()` (bottom of
-`MDWUI_Update.lua`, reusing the updater's `verified()`, its download-path
+`Update.lua`, reusing the updater's `verified()`, its download-path
 dispatch and its in-flight guard) therefore installs MDW itself.
 
-The pin lives in TWO constants in `MDWUI_Config.lua` and they move TOGETHER:
+The pin lives in TWO constants in `Config.lua` and they move TOGETHER:
 `mdwui.minMdwVersion` (what the code needs) and `mdwui.mdwUrl` (where to get
 it). Adopting a newer MDW API means raising both in one edit; never pin
 "latest". MDW never updates itself, by design - a framework swap is only safe

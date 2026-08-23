@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Commands.lua
+  Commands.lua
   The `ui` command: this whole interface under keyboard control.
 
   Why it exists: everything the mouse can do to the UI - reveal a widget,
@@ -27,7 +27,7 @@
   the widget palette exists to match a web page this text has nothing to do
   with, so sharing it would tie the `ui` output to changes in that page.
 
-  Dependencies: MDWUI_Config.lua, MDWUI_Core.lua, MDWUI_Keys.lua (the numpad
+  Dependencies: Config.lua, Core.lua, Keys.lua (the numpad
   toggle), and the widget modules whose wrappers the verbs call.
 ]]
 
@@ -513,7 +513,7 @@ local function journalCategories()
 end
 
 --- Which journal row key a quest id owns: active quests render as `a:<id>`,
--- completions as `d:<id>` (MDWUI_Quests renderQuestJournalInto).
+-- completions as `d:<id>` (Quests renderQuestJournalInto).
 local function questRowKey(id)
   local quests = mdwui.tbl(mdwui.tbl(gmcp and gmcp.Char).Quests)
   for _, quest in ipairs(mdwui.tbl(quests.active)) do
@@ -1441,7 +1441,7 @@ end
 -- The prompt-bar and Combat toggles are generated from the same key lists
 -- `ui prompt` and `ui combat` walk, so a key added there appears here by
 -- itself. Each explanation says what that toggle actually paints (see
--- MDWUI_Combat.lua's prompt bar, prompt-gauge row and Combat rows): "on|off"
+-- Combat.lua's prompt bar, prompt-gauge row and Combat rows): "on|off"
 -- alone does not tell a player which of five gauges they are turning off.
 local PROMPT_HELP = { vitals = "the vitals prompt line", worth = "the worth line (prompt2)",
   hp = "HP gauge", ae = "AE gauge", balance = "balance gauge", enemy = "target's HP gauge" }

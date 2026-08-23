@@ -96,7 +96,7 @@ flush()
 -- running client cannot read the next version's requirement any other way. It
 -- needs to know BEFORE installing, because a package installed against too old
 -- an MDW refuses to build.
-local minMdw = readAll("src/scripts/MDWUI_Config.lua"):match('mdwui%.minMdwVersion%s*=%s*"([^"]+)"')
+local minMdw = readAll("src/scripts/Config.lua"):match('mdwui%.minMdwVersion%s*=%s*"([^"]+)"')
 if not minMdw then
   io.stderr:write("changelog_to_releases: could not read mdwui.minMdwVersion\n")
   os.exit(1)

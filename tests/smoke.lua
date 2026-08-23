@@ -11,9 +11,9 @@ local MDW_SRC = os.getenv("MDW_SRC") or "../mdw/src/scripts/"
 local MDW_ORDER = { "MDW_Config", "MDW_Helpers", "MDW_Init", "MDW_WidgetCore",
   "MDW_DockLayout", "MDW_Widget", "MDW_TabbedWidget", "MDW_Stack", "MDW_Menus",
   "MDW_Examples" }
-local UI_ORDER = { "MDWUI_Config", "MDWUI_Core", "MDWUI_Panels", "MDWUI_Combat",
-  "MDWUI_Comm", "MDWUI_Quests", "MDWUI_Journal", "MDWUI_Keys", "MDWUI_Update",
-  "MDWUI_Commands", "MDWUI_Init" }
+local UI_ORDER = { "Config", "Core", "Panels", "Combat",
+  "Comm", "Quests", "Journal", "Keys", "Update",
+  "Commands", "Init" }
 
 os.remove(H.homeDir .. "/mdw_layout.lua")
 
@@ -1161,7 +1161,7 @@ check(mdw.gameSettings[mdwui.packageName].keys.numpad == false,
 check(mdwui.toggleNumpadWalking() == true and H.nativeKeys["Numpad Walking"] == true,
   "toggling back on enables it again")
 
--- 10b. Keyboard control: the `ui` command (MDWUI_Commands.lua). One
+-- 10b. Keyboard control: the `ui` command (Commands.lua). One
 -- dispatcher serves the shipped alias and this suite, so driving
 -- mdwui.command directly is exactly what the alias runs.
 -- Everything it says goes to the MAIN console, which the stub captures.
@@ -1543,9 +1543,9 @@ H.flushTimers()
 check(table.concat(H.main._echoed):find("Type ui for", 1, true) == nil,
   "the one-time hint does not repeat on later builds")
 
--- 10c. The self-updater (MDWUI_Update.lua). The feed is the package's OWN
+-- 10c. The self-updater (Update.lua). The feed is the package's OWN
 -- CHANGELOG.md read from GitHub - no manifest, no URLs in the data - and the
--- download URL is built from the release contract in MDWUI_Config. The stub
+-- download URL is built from the release contract in Config. The stub
 -- records downloads instead of performing them, so every step here is driven
 -- by writing the file Mudlet would have written and raising the event Mudlet
 -- would have raised.
@@ -2056,7 +2056,7 @@ for _ = 1, 2 do
 end
 check(liveTimerCount() == 1, "script re-runs replace the affects ticker instead of stacking")
 
--- 12d. Bootstrapping MDW (MDWUI_Update.lua). Mudlet resolves no package
+-- 12d. Bootstrapping MDW (Update.lua). Mudlet resolves no package
 -- dependencies - the mfile's "dependencies" field never leaves the exporter -
 -- so this package installs the framework it hard-requires. Driven like 10c:
 -- the stub records downloads instead of performing them, and the suite writes

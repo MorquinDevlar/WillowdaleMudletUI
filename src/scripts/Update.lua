@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Update.lua
+  Update.lua
   The package's self-update: read our own CHANGELOG.md from GitHub, say when
   a newer release exists, and swap the package on the player's word. And, at
   the bottom, the same machinery pointed at MDW: the bootstrap that installs
@@ -9,7 +9,7 @@
   file the repo already keeps (Keep a Changelog, newest release first) is the
   only thing fetched, and no URL ever travels in it. The download URL is
   CONVENTION - tag vX.Y.Z, asset named after the package - built from the
-  constants in MDWUI_Config.lua, which tools/release.sh is bound by too.
+  constants in Config.lua, which tools/release.sh is bound by too.
   A feed that cannot name a URL cannot point an installer anywhere else.
 
   Nothing is periodic. The check runs once per session from mdwui.buildUI()
@@ -24,15 +24,15 @@
   over with a one-click install rather than left as a dead end.
 
   Output goes to the MAIN console with Mudlet's NAMED colours, the same
-  reasoning as MDWUI_Commands.lua: an update offer has to survive whatever
+  reasoning as Commands.lua: an update offer has to survive whatever
   the player has hidden or closed, and this text is literal English rather
   than a transcription of the web client's CSS. Changelog text is REMOTE text, so every line of it goes
   through plain() before it is echoed - "<b>" in a bullet must print, not
   paint.
 
-  Dependencies: MDWUI_Config.lua (the release constants and the MDW pin),
-  MDWUI_Core.lua (versionAtLeast, mdwSatisfied, addTimer). Its event handlers
-  are registered with the rest of the package's in MDWUI_Init.lua.
+  Dependencies: Config.lua (the release constants and the MDW pin),
+  Core.lua (versionAtLeast, mdwSatisfied, addTimer). Its event handlers
+  are registered with the rest of the package's in Init.lua.
 ]]
 
 -- A stalled download must not wedge the checker for the rest of the session,
@@ -84,7 +84,7 @@ local P = {
 
 --- Remote text quoted onto the console: drop "<" so a bullet reading "<b>"
 -- prints instead of turning the rest of the line bold. Same rule (and same
--- reason) as MDWUI_Commands.lua's plain().
+-- reason) as Commands.lua's plain().
 local function plain(text)
   return (tostring(text):gsub("<", ""))
 end
@@ -123,7 +123,7 @@ end
 function mdwui.parseReleases(text)
   if type(text) ~= "string" or text == "" then return {} end
   -- json_to_value is the decoder this package already reads book documents
-  -- with (MDWUI_Journal), so the feed does not introduce a second one. Guarded
+  -- with (Journal), so the feed does not introduce a second one. Guarded
   -- the same way: no decoder means no update path, not an error.
   if not json_to_value then return {} end
   local ok, feed = pcall(json_to_value, text)
@@ -679,7 +679,7 @@ local function installMdw(path)
 end
 
 ---------------------------------------------------------------------------
--- EVENTS (registered with the rest of the package's in MDWUI_Init.lua)
+-- EVENTS (registered with the rest of the package's in Init.lua)
 ---------------------------------------------------------------------------
 
 --- sysDownloadDone(event, savedPath). Every download in the profile raises

@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Comm.lua
+  Comm.lua
   The Communications widget: an MDW TabbedWidget with the web client's channel
   tabs (All / Room / Global / Tells / Group), fed by Comm.Channel pushes and
   the one-shot Comm.History batch.
@@ -8,7 +8,7 @@
   echo pipeline, so its buffer handles reflow-on-resize and the "All" tab
   mirror comes free from allTab.
 
-  Dependencies: MDWUI_Config.lua, MDWUI_Core.lua.
+  Dependencies: Config.lua, Core.lua.
 ]]
 
 --- Append one Comm.Channel-shaped message to its tab. Routing mirrors the

@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Init.lua
+  Init.lua
   Builds the widget layout and wires the GMCP event handlers.
 
   Layout mirrors the web client's default (dockview-widgets.js, layout v3):
@@ -14,7 +14,7 @@
   saved MDW layout, every widget is claimed by a saved group (via
   _pendingStackId) and placement belongs entirely to MDW's restore.
 
-  Dependencies: all other MDWUI_* scripts.
+  Dependencies: all other scripts in this package.
 ]]
 
 ---------------------------------------------------------------------------
@@ -167,7 +167,7 @@ function mdwui.renderAll()
 end
 
 --- Create the full widget set. Runs on every MDW setup (registered in
--- MDWUI_Config via mdw.onReady), so it must be idempotent: Widget:new
+-- Config via mdw.onReady), so it must be idempotent: Widget:new
 -- returns existing widgets, defaultGroup respects saved layouts, and the
 -- ticker replaces itself.
 function mdwui.buildUI()
@@ -239,7 +239,7 @@ function mdwui.buildUI()
     { "Quests", mdwui.renderQuests, { dock = "right" } },
     -- One Journal widget holding the whole `journal` command: the player
     -- journal's categories plus a Quests category carrying the quest journal
-    -- (see MDWUI_Journal.lua). The Quests widget above stays lean.
+    -- (see Journal.lua). The Quests widget above stays lean.
     { "Journal", mdwui.renderJournal, { dock = "right" } },
   }
   for _, def in ipairs(defs) do
@@ -323,7 +323,7 @@ function mdwui.buildUI()
   -- Guarded like every cross-module call at build time; one line, once per
   -- session (announceCommands remembers).
   if mdwui.announceCommands then mdwui.announceCommands() end
-  -- The session's only automatic update check (MDWUI_Update remembers it
+  -- The session's only automatic update check (Update remembers it
   -- ran, so the rebuilds MDW triggers do not re-check). Nothing is printed
   -- unless a newer release exists, and nothing is downloaded but the
   -- changelog until the player says so.
@@ -441,14 +441,14 @@ local handlers = {
     mdwui.renderTopBar()
   end,
 
-  -- The game's own lifecycle commands for this package (MDWUI_Update):
+  -- The game's own lifecycle commands for this package (Update):
   -- gomudui = "remove" / "update". Guarded on that key, because Mudlet's
   -- native package install arrives on the same message.
   ["gmcp.Client.GUI"] = function() mdwui.onClientGui() end,
 
   ["sysUninstallPackage"] = function(event, package) mdwui.onUninstall(event, package) end,
 
-  -- Self-update (MDWUI_Update). Mudlet raises the download events for EVERY
+  -- Self-update (Update). Mudlet raises the download events for EVERY
   -- download in the profile - the mapper's, MDW's - so those handlers match
   -- on the exact path we asked for; sysInstallPackage closes the swap and
   -- is what tells the watchdog to stay quiet.
@@ -456,7 +456,7 @@ local handlers = {
   ["sysDownloadError"] = function(event, err, path) mdwui.onDownloadError(event, err, path) end,
   ["sysInstallPackage"] = function(event, package) mdwui.onInstallPackage(event, package) end,
 
-  -- MDW bootstrap (MDWUI_Update): Mudlet resolves no package dependencies, so
+  -- MDW bootstrap (Update): Mudlet resolves no package dependencies, so
   -- a profile carrying this package but no MDW installs MDW here. Every
   -- script in the profile has loaded by the time this fires, which is why
   -- mdw.version - a load-time assignment - can be trusted; calling ensureMdw

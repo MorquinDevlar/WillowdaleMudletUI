@@ -1,66 +1,66 @@
 [
     {
-        "name": "MDWUI_Config",
+        "name": "Config",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Core",
+        "name": "Core",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Panels",
+        "name": "Panels",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Combat",
+        "name": "Combat",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Comm",
+        "name": "Comm",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Quests",
+        "name": "Quests",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Journal",
+        "name": "Journal",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Keys",
+        "name": "Keys",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Update",
+        "name": "Update",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Commands",
+        "name": "Commands",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"
     },
     {
-        "name": "MDWUI_Init",
+        "name": "Init",
         "isActive": "yes",
         "script": "",
         "isFolder": "no"

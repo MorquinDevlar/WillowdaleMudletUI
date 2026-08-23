@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Journal.lua
+  Journal.lua
   The Journal widget: the in-game `journal` command in full - books,
   documents, quests, rumors, observations, and the player's own notes.
 
@@ -19,7 +19,7 @@
   The Quests category is the exception - it never pulls a list, because
   Char.Journal.List does not serve that category at all (guide 5.15).
 
-  Dependencies: MDWUI_Config.lua, MDWUI_Core.lua, MDWUI_Quests.lua (for the
+  Dependencies: Config.lua, Core.lua, Quests.lua (for the
   Quests category's body renderer).
 ]]
 
@@ -28,7 +28,7 @@
 ---------------------------------------------------------------------------
 
 --- Seed the tables this widget keeps in mdwui.state. State is PRESERVED
--- across script re-runs (MDWUI_Config), so a live session can hold a state
+-- across script re-runs (Config), so a live session can hold a state
 -- table predating any of these fields.
 local function seedState()
   local s = mdwui.state
@@ -392,7 +392,7 @@ function mdwui.onJournalEntry()
 end
 
 ---------------------------------------------------------------------------
--- KEYBOARD ENTRY POINTS (`ui journal`, MDWUI_Commands.lua)
+-- KEYBOARD ENTRY POINTS (`ui journal`, Commands.lua)
 -- Thin wrappers over the locals the links above use, so the request format
 -- and the state keys stay defined exactly once.
 ---------------------------------------------------------------------------

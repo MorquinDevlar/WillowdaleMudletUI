@@ -1,9 +1,9 @@
 --[[
-  MDWUI_Core.lua
+  Core.lua
   Shared plumbing for the Willowdale UI: GMCP requests, formatting, widget
   helpers, and lifecycle (handler/timer registration and cleanup).
 
-  Dependencies: MDWUI_Config.lua must be loaded first.
+  Dependencies: Config.lua must be loaded first.
 ]]
 
 ---------------------------------------------------------------------------

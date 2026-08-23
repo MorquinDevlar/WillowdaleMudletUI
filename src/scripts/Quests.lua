@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Quests.lua
+  Quests.lua
   The Quests widget (the web client's two zone-keyed sections, per-quest
   action menu) and the Journal widget (the full, filterable list over the
   same Char.Quests payload, with lazily fetched per-row detail).
@@ -8,7 +8,7 @@
   explicit Char.Quest.Detail request, and any Char.Quests push invalidates it
   (guide 8.12) - so both widgets re-request rather than trust a stale cache.
 
-  Dependencies: MDWUI_Config.lua, MDWUI_Core.lua.
+  Dependencies: Config.lua, Core.lua.
 ]]
 
 ---------------------------------------------------------------------------
@@ -16,7 +16,7 @@
 ---------------------------------------------------------------------------
 
 --- Seed the tables these two widgets keep in mdwui.state. State is PRESERVED
--- across script re-runs (see MDWUI_Config), so a live session can hold a
+-- across script re-runs (see Config), so a live session can hold a
 -- state table that predates any of these fields - every entry point seeds
 -- before touching them.
 local function seedState()
@@ -347,7 +347,7 @@ end
 -- QUEST JOURNAL (active + rumors + completed over Char.Quests, each row
 -- expanding to the full lazily-fetched quest detail - renderQuestJournal in
 -- gmcp-ui.js). Not a widget of its own: it is one category inside the
--- Journal widget (MDWUI_Journal.lua).
+-- Journal widget (Journal.lua).
 ---------------------------------------------------------------------------
 
 -- Status filter values and labels, matching the web client's select options.
@@ -590,7 +590,7 @@ function mdwui.onCharName(name)
   mdwui.state.journalExpanded = {}
   mdwui.state.questDetailId = nil
   -- The journal's entry ids, indexes and counts belong to the previous
-  -- character too. Guarded: MDWUI_Journal loads after this script, so the
+  -- character too. Guarded: Journal loads after this script, so the
   -- function exists by the time any event can reach here, but not at load.
   if mdwui.resetJournal then mdwui.resetJournal() end
   -- Repaint immediately: the widgets are still showing the previous
@@ -601,7 +601,7 @@ function mdwui.onCharName(name)
 end
 
 ---------------------------------------------------------------------------
--- KEYBOARD ENTRY POINTS (`ui quest` / `ui journal`, MDWUI_Commands.lua)
+-- KEYBOARD ENTRY POINTS (`ui quest` / `ui journal`, Commands.lua)
 -- The chevrons and filter menus above are mouse affordances; these are the
 -- same state changes by name, so both paths land on one implementation.
 ---------------------------------------------------------------------------

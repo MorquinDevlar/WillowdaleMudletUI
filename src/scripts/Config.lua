@@ -1,5 +1,5 @@
 --[[
-  MDWUI_Config.lua
+  Config.lua
   Namespace, static configuration, and the MDW integration seeds for the
   WillowdaleMUD UI.
 
@@ -47,7 +47,7 @@ mdwui.version = "0.1.23"
 -- install` still works there, and that is how a player gets out of it.
 mdwui.minMdwVersion = "0.6.8"
 -- The MDW release this package installs when MDW is missing or too old
--- (mdwui.ensureMdw, MDWUI_Update.lua). Mudlet has NO package dependency
+-- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
 -- and by nothing else - so the pin above is only half a requirement without a
 -- place to get it from. THE TWO MOVE TOGETHER: adopting a newer MDW API means
@@ -68,7 +68,7 @@ mdwui.minMdwVersion = "0.6.8"
 mdwui.mdwUrlFormat = "https://github.com/MorquinDevlar/mdw/releases/download/v%s/MDW.mpackage"
 mdwui.mdwUrl = string.format(mdwui.mdwUrlFormat, mdwui.minMdwVersion)
 
--- Where the self-updater (MDWUI_Update.lua) looks. The GAME SERVER hosts both
+-- Where the self-updater (Update.lua) looks. The GAME SERVER hosts both
 -- files, and a player's client reads nothing else: a push to this repo's main
 -- fires the server's GitHub webhook, which copies build/*.mpackage and
 -- releases/releases.json out of the repo into static/resources/ui/. GitHub
@@ -172,7 +172,7 @@ mdwui.config = {
   -- smoke suite checks).
   numpadKeyFolder = "Numpad Walking",
 
-  -- The numpad walking toggle (MDWUI_Keys, `ui numpad`): on by default to
+  -- The numpad walking toggle (Keys, `ui numpad`): on by default to
   -- match the web client, where it is unconditional; off hands the keypad
   -- back to typing numbers.
   keyDefaults = { numpad = true },
@@ -262,7 +262,7 @@ mdwui.state = mdwui.state or {
   questExpanded = {},  -- quest id -> true while its objective lines are open;
                        -- module-lifetime like the web client's questExpanded,
                        -- so frequent re-renders don't snap an open quest shut
-  -- Quest/Journal caches, all seeded lazily (see MDWUI_Quests seedState) so a
+  -- Quest/Journal caches, all seeded lazily (see Quests seedState) so a
   -- state table preserved from an older script run gains them on the fly:
   --   questDetailCache   id -> Char.Quest.Detail payload (web questDetailCache)
   --   questDetailPending id -> true while a detail request is in flight
@@ -276,7 +276,7 @@ mdwui.state = mdwui.state or {
   -- installs.
   -- hpFillCss / balFillCss (runtime): last-applied prompt-gauge fill
   -- styles, so the per-payload updates only restyle on a band crossing
-  -- Self-update keys (MDWUI_Update, all runtime): updateBusyAt (os.time() of
+  -- Self-update keys (Update, all runtime): updateBusyAt (os.time() of
   -- the download in flight - a timestamp, so a stalled one goes stale),
   -- updateFeedPath / updateFile / updateUrl (what we asked for, matched
   -- against sysDownloadDone's path), updateVersion (the release on offer),
@@ -284,7 +284,7 @@ mdwui.state = mdwui.state or {
   -- check does not), updateCheckedThisSession, and updateInstalled - the
   -- all-clear the watchdog reads, which only works because this table
   -- survives the package swap in the Lua state.
-  -- MDW bootstrap keys (MDWUI_Update, runtime): mdwFile (the download in
+  -- MDW bootstrap keys (Update, runtime): mdwFile (the download in
   -- flight, matched against sysDownloadDone's path) and mdwFetchedFor - the
   -- minMdwVersion the last bootstrap attempt was made for, so a dead network
   -- cannot turn into a retry loop while an update that RAISES the pin still
