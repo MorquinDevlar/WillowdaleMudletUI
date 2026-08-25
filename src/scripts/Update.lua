@@ -588,6 +588,17 @@ end
 -- The key is `mudletui`, not a Willowdale name - it is the wire name from the
 -- server's Go struct, so it stays exactly as sent (the guide's rule: never
 -- rename a GMCP field).
+--
+-- Mudlet REPLACES gmcp.Client.GUI on every Client.GUI message rather than
+-- merging into it, which is what makes the guard safe to run on every event:
+-- a "remove" cannot linger in the table and fire again on the mapper's
+-- install message.
+--
+-- Neither command arrives at all for a player who has turned off Mudlet's
+-- "Allow server to install script packages": that setting gates the whole
+-- Client.GUI branch BEFORE the message reaches the GMCP table, so there is no
+-- event to handle and nothing this package can do about it. `ui update` and
+-- the admin menu's remove are the ways out, and neither goes through GMCP.
 function mdwui.onClientGui()
   local gui = gmcp and gmcp.Client and gmcp.Client.GUI
   local command = type(gui) == "table" and gui.mudletui or nil
