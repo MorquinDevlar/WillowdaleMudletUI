@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.6.8) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.6.9) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
@@ -153,15 +153,18 @@ it, and all three guards must stay:
 Each of the three has its own check in the smoke suite (section 12f); removing
 any one of them fails a different one.
 
-MDW holds up its half as well, since 0.6.9: `mdw.runReadyCallbacks(name)`
-called while the UI is up - a re-join - brackets the callbacks with
-`mdw.reloadPendingLayouts()` and `rebuildStacksFromLayout()`, so a consumer
-that comes back WITHOUT a full `mdw.setup()` still gets the player's layout
-rather than its own defaults. That is defence in depth for this package, not
-a dependency: `mdwui.onInstallPackage` always finishes a swap with
-`mdw.rebuild()`, and the smoke suite passes against 0.6.8 too - which is why
-`mdwui.minMdwVersion` does NOT move for it. Guard 1 above is the consumer
-side of that same contract, and MDW's README now asks every consumer for it.
+MDW holds up its half as well, since 0.6.9 - which is what the pin buys:
+`mdw.runReadyCallbacks(name)` called while the UI is up - a re-join -
+brackets the callbacks with `mdw.reloadPendingLayouts()` and
+`rebuildStacksFromLayout()`, so a consumer that comes back WITHOUT a full
+`mdw.setup()` still gets the player's layout rather than its own defaults.
+Guard 1 above is the consumer side of that same contract, and MDW's README
+now asks every consumer for it. The three guards here do NOT become optional
+because of it: they are what makes the ordinary path - `mdwui.onInstallPackage`
+finishing a swap with `mdw.rebuild()` - preserve a layout at all, and the
+suite still passes with them in place under 0.6.8. What 0.6.9 adds is the
+path this package does not take itself, so that a re-join by any other route
+lands on the player's layout too.
 
 ## Keyboard command surface (`ui`)
 

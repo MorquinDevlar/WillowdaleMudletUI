@@ -33,6 +33,11 @@ out of the version number alone - so neither may change.
 - The game's own "remove the UI" and "update the UI" commands work again
   after a change on the server side.
 
+### Changed
+- The UI now needs MDW 0.6.9, and updates MDW for you if you are on an older
+  one. That is the version which hands a package its saved layout back when
+  it is reinstalled, so the two halves of the fix above are in place together.
+
 ## 0.2.1 - 2026-08-23
 
 ### Changed
