@@ -578,19 +578,19 @@ end
 --
 --   { version, url }      Mudlet's OWN native install path - it downloads and
 --                         installs the package itself. We must not touch it.
---   { gomudui = "..." }   a command aimed at THIS package: "remove" or
+--   { mudletui = "..." }  a command aimed at THIS package: "remove" or
 --                         "update".
 --
--- Hence the guard on the gomudui key first: this handler runs on every
+-- Hence the guard on the mudletui key first: this handler runs on every
 -- Client.GUI, including the install one that arrives on login, and doing
 -- anything there would fight Mudlet for its own installer.
 --
--- The key is `gomudui`, not a Willowdale name - it is the wire name from the
+-- The key is `mudletui`, not a Willowdale name - it is the wire name from the
 -- server's Go struct, so it stays exactly as sent (the guide's rule: never
 -- rename a GMCP field).
 function mdwui.onClientGui()
   local gui = gmcp and gmcp.Client and gmcp.Client.GUI
-  local command = type(gui) == "table" and gui.gomudui or nil
+  local command = type(gui) == "table" and gui.mudletui or nil
   if type(command) ~= "string" then return end
 
   if command == "remove" then

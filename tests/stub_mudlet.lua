@@ -168,7 +168,12 @@ function getMudletHomeDir() return H.homeDir end
 function calcFontSize(size) return size * 0.6, size * 1.2 end
 function getFontSize() return 11 end
 function setFontSize() end
-function getAvailableFonts() return { ["Fira Code Willowdale"] = true, ["Bitstream Vera Sans Mono"] = true } end
+-- The families Qt has loaded. A table the suite can edit, not a literal:
+-- Mudlet registers a package's fonts independently of when it runs that
+-- package's scripts, so a test has to be able to hide one across a build and
+-- hand it back afterwards.
+H.availableFonts = { ["Fira Code Willowdale"] = true, ["Bitstream Vera Sans Mono"] = true }
+function getAvailableFonts() return H.availableFonts end
 -- The main console's family. getFont answers with what was last applied, which
 -- is the closest a stub gets to Qt reporting the family it actually resolved.
 H.mainFont = "Bitstream Vera Sans Mono"

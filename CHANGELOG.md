@@ -22,6 +22,17 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- The UI now applies its typeface as the last step of every build, and
+  checks again a moment later. Mudlet sometimes loads a package's font
+  after it has run the package's scripts, which left the main console in
+  a font nobody chose while the widgets used the right one.
+- Updating the UI no longer resets your layout. Widget grouping, per-widget
+  font sizes, closed widgets and sidebar widths now come back exactly as you
+  left them after an update; only removing the UI clears them, as before.
+- The game's own "remove the UI" and "update the UI" commands work again
+  after a change on the server side.
+
 ## 0.2.1 - 2026-08-23
 
 ### Changed

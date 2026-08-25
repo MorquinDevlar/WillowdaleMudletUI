@@ -28,11 +28,14 @@ Scripts must NEVER call `mdw.*` functions at load time - only seed tables:
 `mdw = mdw or {}`, `mdw.onReady[mdwui.packageName] = ...`, `mdw.gameConfig`,
 `mdw.loadExamples`. MDW runs the registration on every UI build (install,
 profile load, MDW package updates), and `Init.lua` ends with the
-late-join call for when this package installs while MDW is already up.
-`mdwui.packageName` must always equal the mfile's "package" value - Mudlet
-reports that name in sysUninstallPackage, and cleanup only fires on a match.
-Consequence: `mdwui.buildUI()` must stay idempotent - `Widget:new` returns
-existing widgets, and re-running must not duplicate anything.
+late-join call for when this package installs while MDW is already up -
+ARMED on a `tempTimer(0)`, never run at load time, for the reason in
+"Update vs remove". `mdwui.packageName` must always equal the mfile's
+"package" value - Mudlet reports that name in sysUninstallPackage, and
+cleanup only fires on a match. Consequence: `mdwui.buildUI()` must stay
+idempotent - `Widget:new` returns existing widgets, re-running must not
+duplicate anything, and a re-run must not re-apply first-run defaults over
+what is already placed.
 
 MDW >= `mdwui.minMdwVersion` (0.6.8) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
@@ -62,6 +65,32 @@ installed even when the build was refused under an old MDW.
   with `_pendingStackId` because a saved MDW layout owns placement. Widgets
   "not regrouping" after the player rearranged them is correct behavior.
 
+## The typeface
+
+ONE family everywhere, ours to supply and ours to name. `Config.lua` seeds
+`mdw.gameConfig.fontFamily = "Fira Code Willowdale"` and
+`applyMainFont = true`; MDW resolves that to `mdw.config.effectiveFontFamily`
+(falling back to Bitstream Vera Sans Mono when the font is not loaded, without
+touching the preference) and applies `mdw.activeFontFamily()` to every widget
+console, tab, bar, the prompt bar, the header-menu stylesheets and the
+glyph-width maths. The MAIN console is the only surface MDW touches on our
+say-so, which is what `applyMainFont` is. The bundled TTF carries the rename:
+Mudlet registers package fonts with `QFontDatabase::addApplicationFont`, which
+does not disambiguate two families called "Fira Code", so a player with the
+stock face installed would get one or the other unpredictably.
+
+The font is applied LAST, and then re-checked - `mdwui.assertFont`, the final
+line of `buildUI`. Mudlet registers a package's TTF with Qt separately from
+running its scripts, so MDW's setup-time resolution can look for our family a
+moment before it is loadable, fall back, and leave the GAME's own text in a
+face nobody chose. Nothing else re-checks: MDW's re-validation is driven by
+OTHER packages installing and uninstalling, neither of which happens on an
+ordinary profile load. The first pass is DEFERRED, not inline, because
+`mdw.revalidateFontFamily` is a no-op until `mdw.isSetUp` - which MDW sets
+only after every onReady callback has returned. The remaining passes are a
+short ladder that RUNS OUT (`FONT_ASSERT_DELAYS`), never a poll: a font that
+is genuinely gone must keep the fallback and stop asking.
+
 ## Lifecycle discipline
 
 Every event handler, timer, and widget goes through `mdwui.registerHandler` /
@@ -76,6 +105,63 @@ affects ticker never outlives its widget. Numpad walking is the package's own
 native key folder (`src/keys`), which Mudlet installs and removes with the
 package; this package binds no temp keys at all, so there is nothing
 key-related to collect at teardown or uninstall.
+
+## Update vs remove (what a player keeps)
+
+There are TWO ways this package goes away and they must not behave alike:
+
+- **Update** - Mudlet's uninstall immediately followed by an install (a
+  self-update through `mdw.swapPackage`, or a player reinstalling the
+  `.mpackage`). The player keeps EVERYTHING: widget grouping, rows and
+  heights, per-widget font sizes, closed widgets, tab order, dock widths,
+  theme, and our own menu toggles.
+- **Remove** - `mdw.uninstall()`, reached from the admin menu or the game's
+  `Client.GUI` `mudletui = "remove"`. It takes every registered game package,
+  restores the main console font and background, DELETES the layout file and
+  then removes MDW. Nothing is kept, deliberately.
+
+Only two of those live in this package's own state: `mdw.config` (dock widths,
+theme, font sizes) and `mdw.gameSettings[mdwui.packageName]` (our toggles),
+both of which survive in memory across a package swap. Everything per-widget -
+which is what a player actually means by "my layout" - exists ONLY in MDW's
+layout file, so an update is preserved or lost entirely by whether that file
+is still intact when MDW next reads it. Three separate things used to erase
+it, and all three guards must stay:
+
+1. `mdwui.onUninstall` holds MDW's layout-save lock (`mdw.deferLayoutSaves` /
+   `mdw.resumeLayoutSaves(false)`) across its whole body. Every
+   `widget:destroy()` asks MDW to save, and `saveLayout` rewrites
+   `layout.widgets` from the LIVE registry - so a dismantle that saves as it
+   goes writes a file with this package's widgets missing. MDW's own reap
+   (`cleanupGame`) holds the same lock, but which of the two
+   `sysUninstallPackage` handlers Mudlet runs first is not ours to choose.
+2. The late-join at the bottom of `Init.lua` is ARMED a tick late, not run.
+   Mudlet runs a package's scripts INSIDE `installPackage`, so building there
+   happens before anything has re-read the layout - it stamped the first-run
+   defaults over the saved file, and `mdw.rebuild()` on the following
+   `sysInstallPackage` then restored those defaults faithfully. A tick later
+   the rebuild has already happened and the late-join is a no-op; when there
+   is no install (a script re-run in the editor) it still builds.
+3. `defaultGroup` only groups widgets THIS build created (the `created` map
+   in `buildUI`). Neither half of the old test was enough: `_pendingStackId`
+   is consumed by `mdw.rebuildStacksFromLayout` at the end of a setup, and
+   `widget.stackId` is set on every brand-new widget because MDW wraps each
+   one in its own home stack. A second build in one session is ordinary - MDW
+   re-asserts a registered package's onReady on `sysInstallPackage`, landing
+   on the same event as our own `mdw.rebuild()`.
+
+Each of the three has its own check in the smoke suite (section 12f); removing
+any one of them fails a different one.
+
+MDW holds up its half as well, since 0.6.9: `mdw.runReadyCallbacks(name)`
+called while the UI is up - a re-join - brackets the callbacks with
+`mdw.reloadPendingLayouts()` and `rebuildStacksFromLayout()`, so a consumer
+that comes back WITHOUT a full `mdw.setup()` still gets the player's layout
+rather than its own defaults. That is defence in depth for this package, not
+a dependency: `mdwui.onInstallPackage` always finishes a swap with
+`mdw.rebuild()`, and the smoke suite passes against 0.6.8 too - which is why
+`mdwui.minMdwVersion` does NOT move for it. Guard 1 above is the consumer
+side of that same contract, and MDW's README now asks every consumer for it.
 
 ## Keyboard command surface (`ui`)
 
@@ -141,9 +227,9 @@ muddle                                      # builds build/WillowdaleMudletUI.mp
 `src/resources/` ships verbatim into the package ROOT, and the mfile `icon`
 names a file in there which muddler ALSO copies to `.mudlet/Icon/` - so the
 icon is stored twice and its bytes count twice against every self-update
-download. Keep it small for that reason. The bundled font is available, not
-applied: MDW's font settings are sizes only, so nothing selects a family, and
-shipping the TTF is what lets a player pick the web client's face by name.
+download. Keep it small for that reason. The bundled
+`FiraCodeWillowdale-Regular.ttf` is the face the whole UI draws in - see
+"The typeface".
 
 The smoke suite runs the real MDW + this package against `tests/stub_mudlet.lua`
 (a headless Mudlet API) and fixture GMCP payloads. Add a check for every

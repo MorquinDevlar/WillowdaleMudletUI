@@ -21,13 +21,31 @@
 -- LAYOUT
 ---------------------------------------------------------------------------
 
---- Group freshly created widgets into a named stack, unless a saved layout
--- already owns any of them. Returns silently in that case - the player's
--- arrangement always beats our default.
-local function defaultGroup(names, stackName, dock)
+--- Group widgets THIS BUILD created into a named stack, unless a saved
+-- layout already owns any of them. Returns silently in either case - the
+-- player's arrangement always beats our default.
+--
+-- `created` is the whole first-run test, and it has to be, because neither
+-- half is enough on its own:
+--
+--   * `_pendingStackId` only marks a widget a saved layout puts in a GROUP.
+--     It is consumed by mdw.rebuildStacksFromLayout at the end of a setup,
+--     so a SECOND build in the same session sees none of them.
+--   * `widget.stackId` cannot stand in for it either: MDW wraps every widget
+--     in its own "home" stack at creation (mdw.wrapInHomeStack), so it is set
+--     on a brand-new widget too.
+--
+-- And a second build in one session is ordinary, not exotic: MDW re-asserts a
+-- registered game package's onReady on sysInstallPackage, which lands on the
+-- same event as our own mdw.rebuild() after a self-update. Widget:new hands
+-- back an EXISTING widget untouched, so "this build created it" is exactly
+-- the question - a widget that was already there is already placed, by the
+-- player or by the restore, and regrouping it is how an update used to hand
+-- the player back the default layout.
+local function defaultGroup(names, stackName, dock, created)
   for _, name in ipairs(names) do
     local widget = mdw.widgets[name]
-    if not widget or widget._pendingStackId then return nil end
+    if not widget or not created[name] or widget._pendingStackId then return nil end
   end
   return mdw.groupWidgetsIntoStack(names, { dock = dock, name = stackName })
 end
@@ -166,6 +184,67 @@ function mdwui.renderAll()
   mdwui.onCommHistory()
 end
 
+---------------------------------------------------------------------------
+-- TYPEFACE
+---------------------------------------------------------------------------
+
+-- When the post-build typeface assertion runs, in seconds after the build.
+-- The first pass is DEFERRED rather than inline because "after the build" is
+-- the whole point: mdw.revalidateFontFamily is a no-op until mdw.isSetUp,
+-- which MDW only sets once every onReady callback (this package's buildUI
+-- among them) has returned.
+--
+-- The rest is a short ladder, never a poll. A font that is genuinely absent -
+-- a player who removed it, this package uninstalled from under MDW - must
+-- keep MDW's fallback and stop asking, so the passes run out.
+local FONT_ASSERT_DELAYS = { 0, 1, 3 }
+
+--- Is the family this package asks for the one actually being rendered?
+local function fontSettled()
+  local cfg = mdw.config
+  if mdw.activeFontFamily() ~= cfg.fontFamily then return false end
+  if not cfg.applyMainFont then return true end
+  -- getFont reports the family Qt RESOLVED to, which is not always the one
+  -- setFont was handed. Guarded, and an answer we cannot get counts as
+  -- settled: on a Mudlet without getFont, the family MDW believes in is the
+  -- best available answer and retrying cannot improve it.
+  local ok, applied = pcall(function() return getFont and getFont("main") end)
+  if not ok or type(applied) ~= "string" or applied == "" then return true end
+  return applied == cfg.fontFamily
+end
+
+--- Re-assert the UI typeface - the MAIN CONSOLE above all - once the build
+-- has settled, and again a moment later if it did not take.
+--
+-- Mudlet registers a package's TTF with Qt separately from running that
+-- package's scripts, so MDW's setup-time validateFontFamily can look for
+-- "Fira Code Willowdale" while it is not yet loadable. It then resolves to
+-- MDW's own fallback and applyMainFont puts the GAME's text in a face nobody
+-- chose - and nothing re-checks, because MDW's re-validation is driven by
+-- OTHER packages installing and uninstalling, neither of which happens on an
+-- ordinary profile load. This is the re-check.
+--
+-- @param step number|nil Which pass of FONT_ASSERT_DELAYS to arm; nil starts.
+function mdwui.assertFont(step)
+  step = step or 1
+  local delay = FONT_ASSERT_DELAYS[step]
+  if not delay then return end
+  local tid = tempTimer(delay, function()
+    -- MDW may have been torn down between arming and firing; applyMainFont
+    -- has no guard of its own, and a torn-down MDW has already handed the
+    -- main console back to the player's own font.
+    if not (mdw and mdw.isSetUp) then return end
+    -- MDW re-applies the surfaces it owns (widgets, tabs, bars, prompt bar,
+    -- stylesheets) only when the resolved family CHANGED; the main console is
+    -- asserted every pass, because it is the surface a stale fallback is
+    -- visible on and the call costs nothing when it already matches.
+    if mdw.revalidateFontFamily then mdw.revalidateFontFamily() end
+    if mdw.applyMainFont then mdw.applyMainFont() end
+    if not fontSettled() then mdwui.assertFont(step + 1) end
+  end)
+  if tid then mdwui.addTimer(tid) end
+end
+
 --- Create the full widget set. Runs on every MDW setup (registered in
 -- Config via mdw.onReady), so it must be idempotent: Widget:new
 -- returns existing widgets, defaultGroup respects saved layouts, and the
@@ -242,8 +321,13 @@ function mdwui.buildUI()
     -- (see Journal.lua). The Quests widget above stays lean.
     { "Journal", mdwui.renderJournal, { dock = "right" } },
   }
+  -- Asked BEFORE Widget:new, which is the only moment the answer exists: it
+  -- returns an existing widget untouched, so afterwards the two cases look
+  -- identical. See defaultGroup.
+  local created = {}
   for _, def in ipairs(defs) do
     local title = def[3].title or def[1]
+    created[def[1]] = mdw.widgets[def[1]] == nil
     local widget = mdw.Widget:new({ name = def[1], title = title, dock = def[3].dock })
     -- Widget:new hands back an EXISTING widget untouched, so a retitle on an
     -- already-built session has to be applied explicitly.
@@ -256,6 +340,7 @@ function mdwui.buildUI()
   mdw.widgets["Map"]:embedMapper()
 
   -- Comm is a TabbedWidget: channel tabs with "All" mirroring every message.
+  created["Comm"] = mdw.widgets["Comm"] == nil
   mdw.TabbedWidget:new({
     name = "Comm",
     title = "Communications",
@@ -294,17 +379,17 @@ function mdwui.buildUI()
   -- an inventory is counted, and a console with more content than height
   -- scrolls to the BOTTOM, so being short by two lines hides the Weapons
   -- header rather than the tail.
-  local statusStack = defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left")
-  local itemsStack = defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left")
-  defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left")
-  defaultGroup({ "Comm", "Quests", "Journal" }, "MDWUI_Comms", "right")
+  local statusStack = defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", created)
+  local itemsStack = defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", created)
+  defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left", created)
+  defaultGroup({ "Comm", "Quests", "Journal" }, "MDWUI_Comms", "right", created)
   -- AFTER every group exists, never during: see defaultHeight. Until the
   -- character group is created, the items group is the dock's bottom row and
   -- anything set on it is discarded.
   defaultHeight(statusStack, heightForRows(8))
   defaultHeight(itemsStack, heightForRows(equipmentRows()))
   local map = mdw.widgets["Map"]
-  if map and not map._pendingStackId and map.stackId then
+  if map and created["Map"] and not map._pendingStackId and map.stackId then
     mdw.resizeWidgetClass(mdw.widgets[map.stackId], nil, 380)
   end
 
@@ -348,6 +433,10 @@ function mdwui.buildUI()
     mdwui.renderTopBar()
   end, true)
   if tid then mdwui.addTimer(tid) end
+
+  -- LAST, deliberately - see assertFont. Everything above is built; the only
+  -- thing left is to make sure it is all drawn in the face this package ships.
+  mdwui.assertFont()
 end
 
 ---------------------------------------------------------------------------
@@ -445,7 +534,7 @@ local handlers = {
   end,
 
   -- The game's own lifecycle commands for this package (Update):
-  -- gomudui = "remove" / "update". Guarded on that key, because Mudlet's
+  -- mudletui = "remove" / "update". Guarded on that key, because Mudlet's
   -- native package install arrives on the same message.
   ["gmcp.Client.GUI"] = function() mdwui.onClientGui() end,
 
@@ -473,8 +562,26 @@ for event, fn in pairs(handlers) do
 end
 
 -- Late-join (MDW contract): if MDW is already running - this package was just
--- installed or its scripts re-ran - build now instead of waiting for the next
+-- installed or its scripts re-ran - build instead of waiting for the next
 -- profile load. MDW also re-runs the registration on every future setup.
+--
+-- ARMED a tick, never run here, and that tick is load-bearing. Mudlet runs a
+-- package's scripts INSIDE installPackage, so this line is reached in the
+-- middle of an install - before sysInstallPackage, and therefore before
+-- anything has re-read the saved layout. Building at that moment produced
+-- this package's FIRST-RUN defaults (mdw.pendingLayouts was consumed by the
+-- previous build and the file had not been re-read), MDW saved them, and the
+-- mdw.rebuild() that follows on sysInstallPackage then faithfully restored
+-- the defaults it had just been handed. Every update reset the player's
+-- layout that way. A tick later that rebuild has already happened, our
+-- widgets exist, and this is the no-op it should be.
+--
+-- When there is no install behind it - a script re-run from Mudlet's editor -
+-- nothing else builds, and this still does. buildUI's killAllTimers cancels a
+-- pending one, which is only ever correct: it means a build already ran.
 if mdw.isSetUp and mdw.runReadyCallbacks then
-  mdw.runReadyCallbacks(mdwui.packageName)
+  local lateId = tempTimer(0, function()
+    if mdw.isSetUp and mdw.runReadyCallbacks then mdw.runReadyCallbacks(mdwui.packageName) end
+  end)
+  if lateId then mdwui.addTimer(lateId) end
 end

@@ -37,6 +37,9 @@ read_globals = {
   table = { fields = { "contains" } },
   "getModulePath",
   "reloadModule",
+  -- The post-build typeface assertion (Init.lua): getFont reports the family
+  -- Qt actually resolved to, which is how a fallback is spotted. Read guarded.
+  "getFont",
   -- Native key folder toggle (numpad walking ships in src/keys); read guarded.
   "enableKey",
   "disableKey",

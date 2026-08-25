@@ -423,6 +423,25 @@ end
 -- and the MDW registration - MDW itself stays untouched.
 function mdwui.onUninstall(_, package)
   if package ~= mdwui.packageName then return end
+  -- HOLD THE LAYOUT FILE FIRST. Every widget destroyed below asks MDW to save,
+  -- and saveLayout rewrites layout.widgets from the LIVE registry - so a
+  -- dismantle that saves as it goes erases this package's every widget from
+  -- the file it will be restored from. An UPDATE is an uninstall followed by
+  -- an install, so that file is the only record of where the player put
+  -- things; losing it hands them the default layout back on every update.
+  --
+  -- MDW's own reap (cleanupGame) holds the same lock for the same reason, but
+  -- relying on that means relying on MDW's sysUninstallPackage handler running
+  -- before ours - and the order of two named handlers on one event is not ours
+  -- to choose (see removeBar below, which says the same thing). Held here, the
+  -- outcome is the same whichever runs first.
+  --
+  -- Released WITHOUT writing: the layout worth keeping is the one from before
+  -- the uninstall started, and it is already on disk. A full REMOVE deletes
+  -- that file afterwards (mdw.uninstall), which is what makes remove and
+  -- update differ at all.
+  local held = mdw and mdw.deferLayoutSaves and mdw.resumeLayoutSaves
+  if held then mdw.deferLayoutSaves() end
   mdwui.killAllTimers()
   mdwui.killAllHandlers()
   -- An open context menu holds closures into this package - close it with us.
@@ -437,9 +456,11 @@ function mdwui.onUninstall(_, package)
   -- handler sees our mdw.gamePackages entry before we clear it below - the
   -- event handler order is not ours to rely on.
   if mdw and mdw.removeBar then mdw.removeBar("WillowdaleTop") end
+  -- pcall like MDW's own reap: an error part-way through must not leave the
+  -- layout-save lock above held for the rest of the session.
   for name in pairs(mdwui.state.widgets) do
     local widget = mdw and mdw.widgets and mdw.widgets[name]
-    if widget and widget.destroy then widget:destroy() end
+    if widget and widget.destroy then pcall(function() widget:destroy() end) end
   end
   mdwui.state.widgets = {}
   -- Withdraw every MDW registration, not just onReady: a dead onTeardown
@@ -454,4 +475,5 @@ function mdwui.onUninstall(_, package)
   if mdw and mdw.gamePackages then
     mdw.gamePackages[mdwui.packageName] = nil
   end
+  if held then mdw.resumeLayoutSaves(false) end
 end

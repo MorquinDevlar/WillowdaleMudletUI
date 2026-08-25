@@ -89,6 +89,9 @@ end
 for _, name in ipairs(UI_ORDER) do
   assert(pcall(dofile, "src/scripts/" .. name .. ".lua"), "failed loading " .. name)
 end
+-- The late-join build is armed a tick late on purpose (see the bottom of
+-- Init.lua), so a mid-session install needs the tick before there is a UI.
+H.flushTimers()
 check(mdw.widgets["Items"] == nil, "demo-only widget destroyed by mid-session install")
 check(mdw.widgets["Comm"].tabsByName["Global"] ~= nil and mdw.widgets["Comm"].tabsByName["Tell"] == nil,
   "demo Comm replaced with our channel tabs")
@@ -1914,11 +1917,17 @@ check(H.uninstalled[#H.uninstalled] == mdwui.packageName and #H.uninstalled == u
   "a verified download uninstalls the running package")
 check(H.installed[#H.installed] == swapPath and #H.installed == installsBeforeSwap + 1,
   "and installs the replacement in the SAME call - no timer, nothing to wait for")
--- Mudlet runs the new scripts inside installPackage, so by the time the swap
--- returns the package has already late-joined and rebuilt itself. That is the
--- whole point of the seeds: nothing activates the UI, it comes back on its own.
+-- Mudlet runs the new scripts inside installPackage, and the late-join they
+-- carry is ARMED there rather than run: the layout MDW restores from belongs
+-- to the copy being replaced, and a build that ran here would stamp this
+-- package's first-run defaults over it before anything could read it (see the
+-- bottom of Init.lua). A tick later it builds - still with nothing activating
+-- it, which is the whole point of the seeds.
+check(mdw.widgets["Journal"] == nil,
+  "the swap itself does not rebuild - the late-join is armed, not run")
+H.flushTimers()
 check(mdw.widgets["Journal"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
-  "and the new scripts rebuilt the UI on their way in, with nothing to activate")
+  "and a tick later the new scripts have rebuilt the UI, with nothing to activate")
 local accepted = table.concat(H.main._echoed)
 check(accepted:find("Update failed", 1, true) == nil
   and accepted:find("did not finish", 1, true) == nil,
@@ -1997,7 +2006,7 @@ check(heightReport:find("Give a height", 1, true) == nil,
   "and does not answer a question with the syntax")
 
 -- Client.GUI: the game drives this package's lifecycle over the same message
--- Mudlet uses to install it natively, so the gomudui guard is what keeps the
+-- Mudlet uses to install it natively, so the mudletui guard is what keeps the
 -- two apart.
 gmcp.Client = { GUI = { version = "1", url = "https://example/WillowdaleMudletUI.mpackage" } }
 local guiUninstalls, guiDownloads = #H.uninstalled, #H.downloads
@@ -2008,10 +2017,20 @@ check(#H.uninstalled == guiUninstalls and #H.downloads == guiDownloads
   and table.concat(H.main._echoed) == "",
   "Mudlet's own install payload (version/url) is left entirely alone")
 
-gmcp.Client.GUI = { gomudui = "update" }
+-- The server renamed this key; an unknown key is not a command. Anything the
+-- guard does not recognise has to fall through as silently as the install
+-- payload does, or a future rename removes somebody's UI.
+gmcp.Client.GUI = { gomudui = "remove" }
+H.main._echoed = {}
+raiseEvent("gmcp.Client.GUI")
+H.flushTimers()
+check(#H.uninstalled == guiUninstalls and table.concat(H.main._echoed) == "",
+  "the retired gomudui key is ignored, not obeyed")
+
+gmcp.Client.GUI = { mudletui = "update" }
 raiseEvent("gmcp.Client.GUI")
 check(#H.downloads == guiDownloads + 1 and H.downloads[#H.downloads].url == mdwui.releasesUrl,
-  "gomudui update asks the server for the feed")
+  "mudletui update asks the server for the feed")
 -- Manual, not the silent session check: the game asked, so it answers either way.
 check(feed(feedJson({ { mdwui.version, "2026-08-01", { "The first release" } } }))
   :find("You are on the latest version", 1, true) ~= nil,
@@ -2025,7 +2044,7 @@ check(feed(feedJson({ { mdwui.version, "2026-08-01", { "The first release" } } }
 local realUninstall = mdw.uninstall
 local fullUninstallCalled = false
 mdw.uninstall = function() fullUninstallCalled = true end
-gmcp.Client.GUI = { gomudui = "remove" }
+gmcp.Client.GUI = { mudletui = "remove" }
 raiseEvent("gmcp.Client.GUI")
 check(not fullUninstallCalled,
   "remove does not uninstall from inside the event handler it is standing in")
@@ -2163,7 +2182,10 @@ for _ = 1, 2 do
     assert(pcall(dofile, "src/scripts/" .. name .. ".lua"), "failed reloading " .. name)
   end
 end
-check(liveTimerCount() == 1, "script re-runs replace the affects ticker instead of stacking")
+-- Two, not one: every build arms the affects ticker AND the deferred
+-- typeface assert (12e). The number is the point - it must not grow with the
+-- number of re-runs.
+check(liveTimerCount() == 2, "script re-runs replace our timers instead of stacking them")
 
 -- 12d. Bootstrapping MDW (Update.lua). Mudlet resolves no package
 -- dependencies - the mfile's "dependencies" field never leaves the exporter -
@@ -2340,6 +2362,100 @@ check(mdw.isSetUp and mdw.widgets["Combat"] ~= nil
   and mdw.widgets["Comm"].tabsByName["Global"] ~= nil,
   "the UI built itself from its seeds when MDW landed, with nothing to activate")
 check(io.exists(mdwPath) == false, "and the downloaded MDW package is cleaned up once it lands")
+
+-- 12e. The typeface is asserted AFTER the build, not during it. Mudlet
+-- registers a package's TTF with Qt separately from running that package's
+-- scripts, so MDW's setup-time resolution can look for ours a moment before
+-- it is loadable, fall back to Bitstream Vera Sans Mono, and put the GAME's
+-- own text in it. On an ordinary profile load nothing re-checks - MDW's
+-- re-validation is driven by other packages coming and going - so the check
+-- is this package's to make.
+H.availableFonts["Fira Code Willowdale"] = nil
+mdw.revalidateFontFamily() -- the answer a setup() racing the font would get
+check(mdw.config.effectiveFontFamily == "Bitstream Vera Sans Mono"
+  and H.mainFont == "Bitstream Vera Sans Mono",
+  "a font Qt has not registered yet drops the whole UI onto MDW's fallback")
+check(mdw.config.fontFamily == "Fira Code Willowdale",
+  "and the preference survives it, so there is something to come back to")
+mdwui.buildUI() -- every build arms the ladder, as its last act
+H.flushTimers() -- whose first pass still cannot see the font
+check(H.mainFont == "Bitstream Vera Sans Mono", "the fallback stands while the font is missing")
+H.availableFonts["Fira Code Willowdale"] = true
+H.flushTimers() -- the pass that first one armed for itself
+check(mdw.config.effectiveFontFamily == "Fira Code Willowdale"
+  and H.mainFont == "Fira Code Willowdale",
+  "the post-build assert repairs the main console when the font lands late")
+
+-- Bounded, never a poll: a font that is genuinely gone must stop asking
+-- rather than re-arm for the rest of the session.
+mdwui.killAllTimers()
+H.timers = {}
+H.availableFonts["Fira Code Willowdale"] = nil
+mdwui.assertFont()
+local fontRounds = 0
+while next(H.timers) ~= nil and fontRounds < 8 do
+  fontRounds = fontRounds + 1
+  H.flushTimers()
+end
+check(fontRounds == 3, "the assert ladder runs out instead of polling all session")
+H.availableFonts["Fira Code Willowdale"] = true
+mdwui.buildUI() -- leave the session as it was found: font applied, ticker armed
+H.flushTimers()
+check(H.mainFont == "Fira Code Willowdale", "and a build with the font present settles on the first pass")
+
+-- 12f. AN UPDATE MUST NOT COST THE PLAYER THEIR LAYOUT. A package update is
+-- an uninstall immediately followed by an install, and the saved layout is
+-- the only record of where the player put things - so everything that runs in
+-- between has to leave that record alone. Three separate things used to erase
+-- it, and each is checked here:
+--
+--   * our own uninstall handler destroys our widgets, and every destroy asks
+--     MDW to save - which rewrites the file from the LIVE registry, i.e.
+--     without the widgets it just destroyed (Core.lua holds the save lock);
+--   * the late-join at the bottom of Init.lua ran INSIDE installPackage, before
+--     MDW could restore anything, and stamped this package's first-run
+--     defaults over the saved layout (it is armed a tick late now);
+--   * defaultGroup regrouped widgets a second build had not created, which is
+--     what MDW's onReady re-assert on sysInstallPackage is (the `created` map).
+--
+-- The contrast is the point: this is the UPDATE path, where the file must
+-- survive. The REMOVE path deliberately deletes it (mdw.uninstall, spied
+-- above) - that is the difference between the two modes.
+mdw.addToStack("MDWUI_Status", "Quests")   -- dragged out of the right dock
+mdw.setWidgetFontSize("Combat", (mdw.getFontSizes().widgets["Combat"] or 11) + 3)
+mdw.widgets["Forage"]:hide()               -- closed a widget they never use
+mdw.setDockWidth("left", 333)
+mdw.saveLayout()
+local wantMembers = table.concat(mdw.widgets["MDWUI_Status"].members, ",")
+local wantFont = mdw.widgets["Combat"].fontAdjust
+check(wantMembers:find("Quests", 1, true) ~= nil and wantFont ~= 0,
+  "the player rearranged: Quests dragged into the status group, Combat's font bumped")
+
+local function savedLayout()
+  local t = {}
+  pcall(table.load, mdw.layoutFile, t)
+  return t
+end
+raiseEvent("sysUninstallPackage", mdwui.packageName)
+H.flushTimers()
+local held = savedLayout()
+check(held.widgets and held.widgets["Quests"] and held.widgets["Quests"].stackId == "MDWUI_Status",
+  "an ordinary uninstall leaves the saved layout intact - an UPDATE fires one too")
+check(held.widgets["Combat"].fontAdjust == wantFont and held.widgets["Forage"].visible == false,
+  "with every per-widget choice still in it")
+
+for _, name in ipairs(UI_ORDER) do
+  assert(pcall(dofile, "src/scripts/" .. name .. ".lua"), "failed reloading " .. name)
+end
+check(savedLayout().widgets["Quests"].stackId == "MDWUI_Status",
+  "the new copy's scripts do not stamp the default layout over it on their way in")
+raiseEvent("sysInstallPackage", mdwui.packageName)
+H.flushTimers(); H.flushTimers()
+check(table.concat(mdw.widgets["MDWUI_Status"].members, ","):find("Quests", 1, true) ~= nil,
+  "and the player's grouping is what comes back after the update")
+check(mdw.widgets["Combat"].fontAdjust == wantFont, "with their per-widget font size")
+check(mdw.widgets["Forage"].visible == false, "and the widget they closed still closed")
+check(mdw.config.leftDockWidth == 333, "and the sidebar width they set")
 
 -- 13. Uninstalling this package removes everything ours, leaves MDW running.
 -- The event carries the mfile package name - packageName must match it.
