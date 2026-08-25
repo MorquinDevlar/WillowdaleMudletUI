@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.2.2 - 2026-08-25
+
 ### Fixed
 - The UI now applies its typeface as the last step of every build, and
   checks again a moment later. Mudlet sometimes loads a package's font
