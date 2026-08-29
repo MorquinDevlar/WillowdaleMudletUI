@@ -22,6 +22,21 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Added
+- The Equipment widget shows how much of each item you are channelling.
+  Every worn piece carries its percentage between the slot label and its
+  name, the same as the game's own equipment list, colored by how much of
+  the item you hold: blue at full strength, then green, yellow and orange
+  as the share falls, and red at the bottom. Each piece also carries its
+  item level in parentheses before the name. `Att:` and `Lvl:` headings sit
+  on the Weapons line over their columns whenever you have gear on.
+
+### Fixed
+- Taking an update no longer prints a Lua error part way through
+  (`invalid key to 'next'`). The swap ran while Mudlet was still working
+  through the handlers for the event that started it, which could also stop
+  other packages' handlers for that event from running at all.
+
 ## 0.2.2 - 2026-08-25
 
 ### Fixed

@@ -18,7 +18,9 @@ Left dock                      Center            Right dock
   (click to target; auto-retargets when your target dies)
 - **Affects** - buffs and states with locally driven countdowns
 - **Equipment / Inventory / Keyring / Forage** - clickable item lists (look,
-  use with each item's own verb, drop, remove)
+  use with each item's own verb, drop, remove); worn gear shows its attunement
+  percentage, color-banded by how much of the item you channel, and its item
+  level
 - **Quests** - the quests you are tracking, plus anything turn-in-able in this
   zone, with track toggles and lazy per-quest detail
 - **Journal** - the whole `journal` command: books, documents, rumors,

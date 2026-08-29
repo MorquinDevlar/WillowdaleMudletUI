@@ -197,6 +197,17 @@ mdwui.config = {
     flagEnchanted = "136,136,255", -- (#8888ff)
     flagQuest     = "230,168,0",   -- (#e6a800)
 
+    -- Attunement percentage bands (webclient.css .eq-attune-*): one hue per
+    -- quarter of the channel, so the share reads as a state before it reads
+    -- as a number. Four of the five hexes are the quest palette's, transcribed
+    -- again under their own names because the web client names them again -
+    -- an .eq-attune-* that later moves must not drag .qst-status-* with it.
+    attune100 = "74,163,214",  -- .eq-attune-100 full strength (#4aa3d6)
+    attune75  = "79,165,95",   -- .eq-attune-75 (#4fa55f)
+    attune50  = "224,176,32",  -- .eq-attune-50 (#e0b020)
+    attune25  = "200,120,50",  -- .eq-attune-25 (#c87832)
+    attune0   = "225,90,90",   -- .eq-attune-0, under a quarter (#e15a5a)
+
     -- Shared web-client panel palette: webclient.css .char-* transcribed
     -- exactly, reused wherever the web client reuses the same hex - the
     -- keychain table's .key-type is this gold, .key-location this parchment,

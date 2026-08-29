@@ -228,8 +228,13 @@ gmcp = {
       Regen = { name = "Regen", duration_max = -1, duration_current = -1, type = "buff" },
     },
     Inventory = {
+      -- attunement is the share of the item's power the character channels,
+      -- item_level the tier of the piece itself. Two levels of differing width
+      -- so the right-aligned column is exercised, and both attunement bands.
       Worn = { weapon = { id = "!20:aa", name = "iron sword", type = "weapon", sub_type = "sword",
-        details = { "enchanted" }, command = "wield" } },
+        details = { "enchanted" }, command = "wield", attunement = 25, item_level = 12 },
+        body = { id = "!20:bb", name = "leather vest", type = "armor", sub_type = "chest",
+          details = {}, command = "wear", attunement = 100, item_level = 3 } },
       Backpack = {
         -- Shapes taken from a live payload: an item's own command is its verb,
         -- and it is what decides which action a menu offers.
@@ -470,6 +475,73 @@ check(eqText:find("Mainhand:", 1, true) and eqText:find("iron sword", 1, true),
   "equipped item on its labeled slot row")
 check(eqText:find("[<136,136,255>E", 1, true) ~= nil, "enchanted renders as its [E] flag")
 check(eqText:find("-nothing-", 1, true) ~= nil, "empty slots read -nothing-")
+-- Attunement (.eq-attune-*): every occupied slot carries its share, banded by
+-- quarter - a color for full strength is only worth having if full strength
+-- prints, so 100 is a blue "100%" and not a blank. Only empty and disabled
+-- slots pad, to the same six columns the widest percentage fills, so every
+-- name in the panel starts in one column whatever sits in front of it.
+local eqVisible = (eqText:gsub("<%d+,%d+,%d+>", ""))
+check(eqText:find("<200,120,50> 25%  ", 1, true) ~= nil,
+  "a quarter-attuned item takes the orange band, not the yellow one above it")
+check(eqText:find("<74,163,214>100%  ", 1, true) ~= nil,
+  "and a fully attuned one prints 100% in the full-strength blue")
+check(eqVisible:find("Mainhand:  25%  (12)  [E] iron sword", 1, true) ~= nil,
+  "label, percentage, level, flags, name - the game's own row order")
+check(eqVisible:find("Body: 100%   (3)  leather vest", 1, true) ~= nil,
+  "100% spends the column narrower percentages pad, and a short level indents")
+-- The column header rides the Weapons section header, the web client's
+-- .eq-attune-head span inside that row: it exists only because something
+-- below it shows a number, and it sits on the columns those numbers occupy,
+-- in the section-header parchment rather than any band's.
+local eqHead = eqVisible:match("^([^\n]*)\n")
+local eqSword = eqVisible:match("\n([^\n]*iron sword[^\n]*)")
+local eqVest = eqVisible:match("\n([^\n]*leather vest[^\n]*)")
+local eqEmpty = eqVisible:match("\n([^\n]*%-nothing%-[^\n]*)")
+-- Item level (.eq-ilvl): the muted gray between the percentage and the name,
+-- right-aligned in its own four columns so a one-digit and a two-digit level
+-- end together and every name below starts on one column - empty slots pad
+-- the field like they pad the percentage.
+check(eqText:find("<136,136,136>(12) ", 1, true) ~= nil
+  and eqText:find("<136,136,136> (3) ", 1, true) ~= nil,
+  "levels render in the web client's muted gray, the short one right-aligned")
+check(eqVest:find("leather vest", 1, true) == eqSword:find("[E] iron sword", 1, true),
+  "so a one-digit level leaves its name in the same column as a two-digit one")
+check(eqEmpty:find("-nothing-", 1, true) == eqSword:find("[E] iron sword", 1, true),
+  "and an empty slot pads both fields, so -nothing- lands there too")
+check(eqHead == "Weapons:  Att:  Lvl:", "a worn loadout heads the columns on the Weapons line")
+check(eqText:find("<232,220,200>Att:", 1, true) ~= nil,
+  "the header takes the section header's parchment, not a band color")
+check(eqSword:find(" 25%", 1, true) == eqHead:find("Att:", 1, true),
+  "and it starts on the same column as the percentage below it")
+check(eqVest:find("100%", 1, true) == eqHead:find("Att:", 1, true),
+  "which the four-character 100% shares with the three-character ones")
+check(eqSword:find("(12)", 1, true) == eqHead:find("Lvl:", 1, true),
+  "and Lvl: starts on the same column as the level tokens below it")
+-- The whole band ladder (.eq-attune-100/-75/-50/-25/-0), including the bottom
+-- rung the game cannot reach today - a worn item floors at 25% - but which the
+-- payload could still carry.
+for _, band in ipairs({
+  { 100, "74,163,214", "blue of full strength" },
+  { 80, "79,165,95", "green just under it" },
+  { 60, "224,176,32", "yellow of the half" },
+  { 40, "200,120,50", "orange of the quarter" },
+  { 10, "225,90,90", "red below a quarter" },
+}) do
+  gmcp.Char.Inventory.Worn.weapon.attunement = band[1]
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  check(joined(eq):find(string.format("<%s>%3d%%", band[2], band[1]), 1, true) ~= nil,
+    string.format("attunement %d takes the %s", band[1], band[3]))
+end
+gmcp.Char.Inventory.Worn.weapon.attunement = 25
+-- Nothing worn, nothing to head: a header over an all-blank column reads as
+-- broken, so an empty loadout leaves the section headers bare.
+local wornFixture = gmcp.Char.Inventory.Worn
+gmcp.Char.Inventory.Worn = {}
+raiseEvent("gmcp.Char.Inventory.Worn")
+check(joined(eq):find("Att:", 1, true) == nil,
+  "an empty loadout renders no header over the blank column")
+gmcp.Char.Inventory.Worn = wornFixture
+raiseEvent("gmcp.Char.Inventory.Worn")
 check(findLink(eq.content, "iron sword").hint
   == "iron sword\nWeapon (Sword)\nEnchanted\nUse: Remove",
   "equipment row hint carries the web tooltip box")
@@ -1871,9 +1943,12 @@ writeFile(H.downloads[#H.downloads].path, "PK\003\004tiny")
 raiseEvent("sysDownloadDone", H.downloads[#H.downloads].path)
 
 -- A refused swap is known AT ONCE, in a context that still exists, instead of
--- being discovered twenty seconds later by a watchdog. Tested before the real
--- swap below, because a swap uninstalls this package - and with it the very
--- handlers that carry the next download event.
+-- being discovered twenty seconds later by a watchdog. "At once" is one tick,
+-- not one call: the swap is armed on a tempTimer(0) so that installing a
+-- package never registers handlers into the table Mudlet is walking to reach
+-- this handler (see installDownloaded). Tested before the real swap below,
+-- because a swap uninstalls this package - and with it the very handlers that
+-- carry the next download event.
 local realSwap = mdw.swapPackage
 mdw.swapPackage = function() return false, "Mudlet refused the install" end
 mdwui.installUpdate()
@@ -1881,6 +1956,7 @@ local refusedPath = H.downloads[#H.downloads].path
 writeFile(refusedPath, PACKAGE_BYTES)
 H.main._echoed, H.main._links = {}, {}
 raiseEvent("sysDownloadDone", refusedPath)
+H.flushTimers()
 local watch = table.concat(H.main._echoed)
 check(watch:find("Update failed", 1, true) ~= nil and watch:find("refused", 1, true) ~= nil,
   "a refused swap says so immediately, with the reason MDW gave")
@@ -1913,10 +1989,18 @@ writeFile(swapPath, PACKAGE_BYTES)
 H.main._echoed, H.main._links = {}, {}
 local installsBeforeSwap = #H.installed
 raiseEvent("sysDownloadDone", swapPath)
+-- NOTHING may happen inside the dispatch itself. Mudlet walks its handler
+-- table with pairs() to reach this handler, and installing a package runs that
+-- package's scripts, which register handlers INTO that table - a rehash mid-walk,
+-- reported as "invalid key to 'next'" from the dispatcher, with every remaining
+-- handler for the event skipped. A live client reported that error taking 0.2.2.
+check(#H.uninstalled == uninstallsBefore and #H.installed == installsBeforeSwap,
+  "no package is swapped from inside the event dispatch that asked for it")
+H.flushTimers()
 check(H.uninstalled[#H.uninstalled] == mdwui.packageName and #H.uninstalled == uninstallsBefore + 1,
   "a verified download uninstalls the running package")
 check(H.installed[#H.installed] == swapPath and #H.installed == installsBeforeSwap + 1,
-  "and installs the replacement in the SAME call - no timer, nothing to wait for")
+  "and installs the replacement back to back in that same tick - no waiting, nothing to guess")
 -- Mudlet runs the new scripts inside installPackage, and the late-join they
 -- carry is ARMED there rather than run: the layout MDW restores from belongs
 -- to the copy being replaced, and a build that ran here would stamp this
@@ -2280,11 +2364,15 @@ writeFile(mdwPath, PACKAGE_BYTES)
 bootInstalls = #H.installed
 raiseEvent("sysDownloadDone", mdwPath)
 check(#H.uninstalled == bootUninstalls, "MDW absent: nothing is uninstalled on the way in")
--- No timer: THIS package is not the one being removed, which is the whole
--- reason a package built on MDW is what moves MDW. The mirror of
--- mdw.swapPackage, in the direction MDW cannot do for itself.
+check(#H.installed == bootInstalls,
+  "and nothing is installed from inside the download event either")
+-- One tick out of the dispatch, then uninstall and install back to back inside
+-- it: THIS package is not the one being removed, which is the whole reason a
+-- package built on MDW is what moves MDW. The mirror of mdw.swapPackage, in the
+-- direction MDW cannot do for itself.
+H.flushTimers()
 check(H.installed[#H.installed] == mdwPath and #H.installed == bootInstalls + 1,
-  "and MDW installs in the same call, with no timer to wait out")
+  "and MDW installs on the next tick, with nothing to wait out after that")
 
 -- An MDW that is merely too old: uninstall FIRST (Mudlet refuses to install
 -- over a name it holds), and only once the replacement is proven on disk.
@@ -2295,6 +2383,7 @@ mdwPath = H.downloads[#H.downloads].path
 writeFile(mdwPath, PACKAGE_BYTES)
 bootInstalls = #H.installed
 raiseEvent("sysDownloadDone", mdwPath)
+H.flushTimers() -- the tick that takes the swap out of the download dispatch
 check(H.uninstalled[#H.uninstalled] == "MDW" and #H.uninstalled == bootUninstalls + 1,
   "a verified download uninstalls the old MDW - only now, with the replacement on disk")
 check(mdw.isSetUp == false, "MDW's teardown ran inside that uninstall (our onTeardown hook with it)")
@@ -2318,8 +2407,9 @@ local heldPath = H.downloads[#H.downloads].path
 writeFile(heldPath, PACKAGE_BYTES)
 local heldInstalls = #H.installed
 raiseEvent("sysDownloadDone", heldPath)
+H.flushTimers()
 check(H.installed[#H.installed] == heldPath and #H.installed == heldInstalls + 1,
-  "a raised minimum installs its MDW in the same call, exactly once")
+  "a raised minimum installs its MDW on the next tick, exactly once")
 mdw.version = mdwVersionForRace
 
 -- The guard is per REQUIREMENT, not per session. It used to be a plain "have

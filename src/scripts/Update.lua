@@ -491,6 +491,9 @@ end
 --- The package file landed. Verify FIRST: nothing is uninstalled until the
 -- replacement is proven, because the running UI is the only copy the player
 -- has.
+-- Forward declaration: installDownloaded arms it a tick ahead of its body.
+local swapNow
+
 local function installDownloaded(path)
   local ok, why = verified(path)
   if not ok then
@@ -529,12 +532,36 @@ local function installDownloaded(path)
     mdwui.packageName, version))
   mdwui.state.updateInstalled = false
 
-  -- MDW first, because MDW is not the package being removed and so can do the
-  -- swap back to back and tell us what Mudlet actually said. The failure this
-  -- package spent a day on - an install offered before the uninstall had
-  -- finished, accepted, then silently ignored - cannot happen this way, and a
-  -- refusal is known HERE rather than twenty seconds later from a watchdog.
-  -- No timers either way, so there is no watchdog to arm.
+  -- ONE TICK OUT OF THE EVENT DISPATCH, and everything below happens inside
+  -- it. This function is reached from a sysDownloadDone handler, and Mudlet's
+  -- dispatcher walks its handler table with pairs() while it runs
+  -- (dispatchEventToFunctions, mudlet-lua/lua/Other.lua) - so a swap performed
+  -- here installs a package, which RUNS that package's scripts, which register
+  -- event handlers, which insert into the very table being walked. Clearing a
+  -- field mid-walk is legal Lua; adding one can rehash the table and strand the
+  -- iterator, and Mudlet reports that as "invalid key to 'next'" raised in the
+  -- dispatcher itself - which means the remaining handlers for that event never
+  -- run at all. A live client reported that error while taking 0.2.2; which
+  -- package's load-time registration did the inserting was never established,
+  -- and does not need to be. Any package in the profile can be the one - the
+  -- Willowdale mapper registers anonymous handlers at script load - so the
+  -- swap simply does not belong inside anyone's dispatch.
+  --
+  -- The tick changes nothing else: the uninstall and the install stay back to
+  -- back INSIDE the timer, which is what the comment below is about.
+  local swapId = tempTimer(0, function() swapNow(path, version) end)
+  if swapId then mdwui.addTimer(swapId) end
+end
+
+-- The swap itself, always entered from a timer (see installDownloaded).
+--
+-- MDW first, because MDW is not the package being removed and so can do the
+-- swap back to back and tell us what Mudlet actually said. The failure this
+-- package spent a day on - an install offered before the uninstall had
+-- finished, accepted, then silently ignored - cannot happen this way, and a
+-- refusal is known HERE rather than twenty seconds later from a watchdog.
+-- No timers either way, so there is no watchdog to arm.
+function swapNow(path, version)
   if mdw and type(mdw.swapPackage) == "function" then
     local swapped, refusal = mdw.swapPackage(mdwui.packageName, path)
     if not swapped then
@@ -732,6 +759,9 @@ end
 -- a sharper reason: uninstalling MDW takes the whole UI down with it, so a
 -- GitHub error page must never cost a player the MDW they are already
 -- running.
+-- Forward declaration, as with swapNow above.
+local installMdwNow
+
 local function installMdw(path)
   local ok, why = verified(path)
   if not ok then
@@ -742,6 +772,15 @@ local function installMdw(path)
     return
   end
   mdwui.say("Installing MDW - the UI builds itself when it lands.")
+  -- A TICK OUT OF THE EVENT DISPATCH FIRST, for the reason spelled out in
+  -- installDownloaded: this runs from a sysDownloadDone handler, and installing
+  -- a package registers that package's handlers into the table Mudlet is in the
+  -- middle of walking. The uninstall and install stay adjacent inside the timer.
+  local id = tempTimer(0, function() installMdwNow(path) end)
+  if id then mdwui.addTimer(id) end
+end
+
+function installMdwNow(path)
   -- Absent is the ordinary case (this package installed on its own); present
   -- means it is merely too old, and Mudlet refuses to install over a package
   -- name it already holds. getPackages is Mudlet 4.12+.

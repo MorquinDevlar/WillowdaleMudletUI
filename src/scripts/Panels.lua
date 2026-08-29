@@ -287,6 +287,19 @@ local function eqFlags(details)
   return table.concat(flags) .. " "
 end
 
+-- Attunement band (webclient.css .eq-attune-*): the quarter of the channel
+-- the share falls in, so the hue answers "how much of this am I holding" at a
+-- glance. The bottom band is unreachable today - the game floors a worn item
+-- at 25% - but a payload is a payload.
+local function attColor(att)
+  local C = mdwui.config.colors
+  if att >= 100 then return C.attune100 end
+  if att >= 75 then return C.attune75 end
+  if att >= 50 then return C.attune50 end
+  if att >= 25 then return C.attune25 end
+  return C.attune0
+end
+
 function mdwui.renderEquipment()
   local widget = mdwui.w("Equipment")
   if not widget then return end
@@ -295,14 +308,61 @@ function mdwui.renderEquipment()
   local co = widget.content
   co:clear()
 
+  -- Column headers over the attunement and level fields, the web client's
+  -- .eq-attune-head and .eq-ilvl-head spans inside the Weapons .eq-header
+  -- row: rendered ONLY when some row will actually show a percentage, since
+  -- the columns are blank on empty slots and headers over all-blank columns
+  -- read as broken. They ride the FIRST section header instead of a line of
+  -- their own, matching the game's own terminal display - "Weapons:" fills
+  -- columns 1-8 and the two spaces take 9-10, so "Att:" lands on 11-14 over
+  -- the "100%" field, and two more spaces put "Lvl:" on 17-20 over the level
+  -- tokens (9-wide label plus a space, percentage on 11-14, level on 17-20).
+  -- They take the section-header parchment (C.charHeader), one voice with
+  -- the "Weapons:" beside them - the values keep their own colors.
+  local anyAttuned = false
+  for _, section in ipairs(mdwui.config.wornSections) do
+    for _, slot in ipairs(section.slots) do
+      local item = worn[slot[1]]
+      local att = tonumber(item and item.attunement)
+      if att and att > 0 then anyAttuned = true end
+    end
+  end
+
   for si, section in ipairs(mdwui.config.wornSections) do
     if si > 1 then co:decho("\n") end -- .eq-section spacing
-    co:decho(string.format("<%s>%s:\n", C.charHeader, section.header))
+    local attHead = ""
+    if si == 1 and anyAttuned then
+      attHead = string.format("  <%s>Att:  Lvl:", C.charHeader)
+    end
+    co:decho(string.format("<%s>%s:%s\n", C.charHeader, section.header, attHead))
     for _, slot in ipairs(section.slots) do
       local key, slotLabel = slot[1], slot[2]
       local item = worn[key]
       -- 9 fits the longest label ("Mainhand:"), right-aligned (.eq-label)
       local label = string.format("<%s>%9s ", C.charGold, slotLabel .. ":")
+      -- Attunement: the share of an item's power the character channels,
+      -- on every occupied slot and banded by quarter (attColor) - a color for
+      -- full strength only means anything if full strength prints. 0, and a
+      -- payload with no attunement at all, is the empty/disabled placeholder
+      -- and pads instead, so the names below stay in one column. The 6-column
+      -- field is the game's own terminal layout, and 100 spends the fourth
+      -- column the padding already reserved.
+      local att = tonumber(item and item.attunement) or 0
+      local attCol = "      "
+      if att > 0 then
+        attCol = string.format("<%s>%3d%%  ", attColor(att), att)
+      end
+      -- Item level in parentheses, the web client's .eq-ilvl span between the
+      -- attunement and the name, in its muted gray (#888, our charLabel). The
+      -- token right-aligns in 4 columns so "(5)" and "(12)" end together and
+      -- every name still starts in one column; 0 is the untiered/empty
+      -- placeholder and pads the same 6 columns instead
+      -- ("Mainhand:  25%  (12) Bronze Shortsword").
+      local lvl = tonumber(item and item.item_level) or 0
+      local lvlCol = "      "
+      if lvl > 0 then
+        lvlCol = string.format("<%s>%4s  ", C.charLabel, "(" .. lvl .. ")")
+      end
       if item and item.name and item.name ~= "" and item.name ~= "disabled" then
         -- Tooltip: details title-cased as their own lines, then the fixed
         -- remove verb - updateEquipSlot's exact box.
@@ -314,7 +374,7 @@ function mdwui.renderEquipment()
         -- The row opens the action menu: Remove then Look, the web client's
         -- equipment menu (gmcp-ui.js) - and Remove takes the SLOT name.
         mdwui.menuLink(co,
-          label .. eqFlags(item.details) .. string.format("<%s>%s", C.itemTeal, item.name),
+          label .. attCol .. lvlCol .. eqFlags(item.details) .. string.format("<%s>%s", C.itemTeal, item.name),
           item.name, {
             { label = "Remove", command = "remove " .. key },
             { label = "Look", command = "look " .. (item.id or "") },
@@ -322,7 +382,7 @@ function mdwui.renderEquipment()
       else
         -- name == "disabled" is a real server state (updateEquipSlot)
         local empty = (item and item.name == "disabled") and "-disabled-" or "-nothing-"
-        co:decho(label .. string.format("<%s>%s", C.faint, empty))
+        co:decho(label .. attCol .. lvlCol .. string.format("<%s>%s", C.faint, empty))
       end
       co:decho("\n")
     end

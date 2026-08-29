@@ -313,11 +313,12 @@ function json_to_value(text)
   return parseValue()
 end
 function raiseEvent(event, ...)
-  -- Snapshot: handlers may deregister themselves mid-dispatch (uninstall
-  -- does), and real Mudlet dispatches over a copy.
-  local snapshot = {}
-  for k, v in pairs(H.handlers[event] or {}) do snapshot[k] = v end
-  for _, fn in pairs(snapshot) do
+  -- Over the LIVE table, because that is what Mudlet does: dispatchEventToFunctions
+  -- walks handlers[event] with pairs() while handlers register and deregister
+  -- themselves inside it (mudlet-lua/lua/Other.lua). Clearing a field mid-walk is
+  -- legal Lua; ADDING one can rehash the table and strand the iterator with
+  -- "invalid key to 'next'", which is a real crash a snapshot would hide - and did.
+  for _, fn in pairs(H.handlers[event] or {}) do
     local f = fn
     if type(f) == "string" then -- resolve "mdw.onInstall" style names
       f = _G
@@ -331,7 +332,15 @@ function registerNamedEventHandler(user, name, event, fn)
   H.handlers[event][name] = fn
 end
 function deleteNamedEventHandler(user, name)
-  for _, tbl in pairs(H.handlers) do tbl[name] = nil end
+  -- Only where the name is actually registered. In Lua 5.1 `tbl[k] = nil` for a
+  -- key that was never there still CREATES the node (luaH_set makes the key,
+  -- then stores nil), which can rehash the table - and rehashing a table that a
+  -- dispatch above us is walking strands its iterator with "invalid key to
+  -- 'next'". Mudlet's own deleteNamedEventHandler is C++ and has no such
+  -- effect, so blanket-clearing here invented a crash the client cannot have.
+  for _, tbl in pairs(H.handlers) do
+    if tbl[name] ~= nil then tbl[name] = nil end
+  end
 end
 function tempTimer(t, fn, _repeating)
   H.nextTimerId = H.nextTimerId + 1
