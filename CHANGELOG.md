@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.3.0 - 2026-08-30
+
 ### Added
 - The Equipment widget shows how much of each item you are channelling.
   Every worn piece carries its percentage between the slot label and its
