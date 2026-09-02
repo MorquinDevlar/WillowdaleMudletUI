@@ -253,6 +253,7 @@ mdwui.widgetSynonyms = {
   keys = "Keyring", herbs = "Forage",
   grp = "Group", party = "Group",
   fight = "Combat", buffs = "Affects", effects = "Affects",
+  music = "Music", audio = "Music", playlist = "Music",
 }
 
 --- Widgets are addressed by TITLE in output, matching the tab labels the
@@ -337,6 +338,11 @@ end
 
 local PROMPT_KEYS = { "vitals", "worth", "hp", "ae", "balance", "enemy" }
 local COMBAT_KEYS = { "hp", "ae", "balance", "enemy", "info" }
+-- `ui music`: the settings, then the two actions, then the levels. Each one
+-- writes through Char.Audio.Set (guide 5.16), the same silent node the widget
+-- uses, so the keyboard and the mouse cannot describe the audio differently.
+local MUSIC_KEYS = { "repeat", "shuffle", "mode", "next", "stop", "volume" }
+local MUSIC_MODES = { "server", "playlist" }
 local JOURNAL_CATEGORIES = { "books", "documents", "quests", "rumors", "observations", "notes" }
 
 --- Print one settings section as `key on  key off ...`. The colour goes on
@@ -1026,6 +1032,111 @@ COMMANDS = {
       mdwui.say(string.format("Combat %s %s.", key, value and "on" or "off"))
     end },
 
+  { name = "music", aliases = { "audio" },
+    usage = "ui music [repeat|shuffle [on|off]|mode server|playlist|next|stop|volume <name> <0-100>]",
+    help = "The music: what is playing, the playlist, repeat and shuffle, who picks the track, "
+      .. "and the five levels. Volume names: music combat movement environment other.",
+    run = function(words)
+      local audio = mdwui.tbl(mdwui.tbl(gmcp and gmcp.Char).Audio)
+      -- Every level the game keeps, the music one first. Read here rather
+      -- than listed again, so a category added to the wire shows up in the
+      -- command with the widget.
+      local names = { "music" }
+      for _, category in ipairs(mdwui.audioCategories) do names[#names + 1] = category end
+
+      if not words[2] then
+        if not next(audio) then
+          mdwui.say("Your audio settings have not arrived from the server yet.")
+          return
+        end
+        local playing = mdwui.musicTrack(audio.track)
+        mdwui.say(string.format("Music: %s mode, %s.", plain(audio.mode or "server"),
+          playing and ("playing " .. plain(playing.title or playing.id)) or "nothing playing"))
+        line(string.format("  <%s>repeat %s  <%s>shuffle %s",
+          audio["repeat"] and P.good or P.bad, audio["repeat"] and "on" or "off",
+          audio.shuffle and P.good or P.bad, audio.shuffle and "on" or "off"))
+        local titles = {}
+        for _, id in ipairs(mdwui.tbl(audio.playlist)) do
+          local track = mdwui.musicTrack(id)
+          titles[#titles + 1] = plain((track and track.title) or id)
+        end
+        line(string.format("  <%s>Playlist <%s>%s", P.head, P.text,
+          (#titles > 0) and table.concat(titles, ", ") or "empty"))
+        local levels = {}
+        for _, name in ipairs(names) do
+          levels[#levels + 1] = string.format("%s %d", name,
+            (name == "music") and (tonumber(audio.music_volume) or 0)
+              or (tonumber(mdwui.tbl(audio.volumes)[name]) or 0))
+        end
+        line(string.format("  <%s>Volume <%s>%s", P.head, P.text, table.concat(levels, "  ")))
+        return
+      end
+
+      local key, candidates = resolvePrefix(MUSIC_KEYS, words[2])
+      if not key then
+        mdwui.say(string.format("No music setting '%s'. Try: %s", plain(words[2]),
+          candidateText(#candidates > 0 and candidates or MUSIC_KEYS)))
+        return
+      end
+
+      if key == "next" then
+        mdwui.audioSet({ next = true })
+        mdwui.say("Skipping to the next track.")
+        return
+      end
+      if key == "stop" then
+        mdwui.audioSet({ track = "" })
+        mdwui.say("Music stopped.")
+        return
+      end
+      if key == "repeat" or key == "shuffle" then
+        local value = parseOnOff(words[3], audio[key])
+        if value == nil then
+          mdwui.say("Say on or off, not '" .. plain(words[3]) .. "'.")
+          return
+        end
+        mdwui.audioSet({ [key] = value })
+        mdwui.say(string.format("Music %s %s.", key, value and "on" or "off"))
+        return
+      end
+      if key == "mode" then
+        if not words[3] then
+          mdwui.say("Which mode? ui music mode server|playlist")
+          return
+        end
+        local mode = resolvePrefix(MUSIC_MODES, words[3])
+        if not mode then
+          mdwui.say(string.format("No music mode '%s'. Try: %s", plain(words[3]),
+            candidateText(MUSIC_MODES)))
+          return
+        end
+        mdwui.audioSet({ mode = mode })
+        mdwui.say(string.format("Music mode %s.", mode))
+        return
+      end
+
+      if not words[3] then
+        mdwui.say("Which level? ui music volume <name> <0-100>   Names: "
+          .. candidateText(names))
+        return
+      end
+      local name, volCandidates = resolvePrefix(names, words[3])
+      if not name then
+        mdwui.say(string.format("No volume called '%s'. Try: %s", plain(words[3]),
+          candidateText(#volCandidates > 0 and volCandidates or names)))
+        return
+      end
+      local level = tonumber(words[4])
+      if not level or level < 0 or level > 100 then
+        mdwui.say(string.format("Give a level from 0 to 100. Usage: ui music volume %s <0-100>",
+          name))
+        return
+      end
+      level = math.floor(level)
+      mdwui.setMusicVolume(name, level)
+      mdwui.say(string.format("Music volume %s %d.", name, level))
+    end },
+
   { name = "quest", aliases = { "quests" },
     usage = "ui quest [<id>|back|expand <id>|collapse <id>]",
     help = "The Quests widget: open one quest's detail view, go back, or fold its objective lines.",
@@ -1552,6 +1663,14 @@ local OVERVIEW = {
       opts = "up|down|top|bottom [<n>]   default 10 lines" },
     { cmd = "comm", link = "comm", value = commTab,
       opts = "<tab>|clear   channel tabs of the Communications widget" },
+    -- The value is who is choosing the track, which is the one thing a
+    -- player checks before touching anything else here.
+    { cmd = "music", link = "music",
+      value = function()
+        local audio = mdwui.tbl(mdwui.tbl(gmcp and gmcp.Char).Audio)
+        return (audio.mode and audio.mode ~= "") and tostring(audio.mode) or "-"
+      end,
+      opts = "repeat|shuffle|mode|next|stop|volume <name> <0-100>" },
   } },
   { title = "Quests and Journal widget:", colour = P.verbPanels, rows = {
     { cmd = "quest", link = "quest",

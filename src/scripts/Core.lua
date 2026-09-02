@@ -132,6 +132,45 @@ function mdwui.hpFillColor(cur, max)
   return cfg.gauges.hpFill
 end
 
+--- AE track CSS carrying the bound slice of the pool (guide 8.3
+-- `aether_reserved`, web _setGaugeReserved). The bar keeps spanning the TRUE
+-- maximum: the slice is pinned at the full end, so the fill - still scaled
+-- against that maximum - runs up to meet it and a pool at its capped ceiling
+-- reads as full. Nothing bound returns the plain track byte for byte, so
+-- everyone without a reserve keeps the gauge they have always had.
+--
+-- The web puts the slice in its own div over the track; a Geyser gauge is
+-- three labels and the track is one of them, so it lives in the track's own
+-- brush instead - two identical stops a ten-thousandth apart, which is how a
+-- Qt gradient draws a boundary rather than a blend.
+function mdwui.aeTrackCss(reserved, max)
+  local g = mdwui.config.gauges
+  reserved, max = tonumber(reserved) or 0, tonumber(max) or 0
+  if reserved <= 0 or max <= 0 then return mdwui.trackCss(g.aeTrack) end
+  -- Everything bound: no boundary left to draw, and no fill to meet it.
+  if reserved >= max then return mdwui.trackCss(g.aeReserved) end
+  local edge = 1 - reserved / max
+  return string.format(
+    "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+      .. "stop:0 %s, stop:%.4f %s, stop:%.4f %s, stop:1 %s); %s",
+    g.aeTrack, edge, g.aeTrack, math.min(1, edge + 0.0001), g.aeReserved,
+    g.aeReserved, g.frame)
+end
+
+--- The AE gauge as both surfaces draw it: current, true max, the value the
+-- FILL takes, and the track CSS. Only the fill differs from the numbers -
+-- a reserve covering the whole pool leaves no fill at all (web
+-- updatePromptBar), while the label keeps the true current/max.
+function mdwui.aeGauge(vitals)
+  vitals = vitals or {}
+  local cur = tonumber(vitals.aether) or 0
+  local max = tonumber(vitals.aether_max) or 0
+  -- Absent on an older server, and 0 for everyone holding nothing.
+  local reserved = tonumber(vitals.aether_reserved) or 0
+  local fill = (max > 0 and reserved >= max) and 0 or cur
+  return cur, max, fill, mdwui.aeTrackCss(reserved, max)
+end
+
 --- Group-member fill color (gmcp-ui.js groupHealthClass bands: 75/40/15).
 function mdwui.grpFillColor(cur, max)
   local g = mdwui.config.gauges
@@ -200,8 +239,13 @@ end
 
 --- Emit a clickable action into a widget console. `command` is sent verbatim,
 -- matching the web client's rule that widget affordances are real commands.
+--
+-- Sent SILENTLY (send's second argument): a widget action is a mouse gesture,
+-- not something the player typed, so echoing the command line it stands for
+-- puts words in their input history that they never wrote. The game's own
+-- answer still prints - it is only the echo of the command that goes.
 function mdwui.link(console, dechoText, command, hint)
-  console:dechoLink(dechoText, function() send(command) end, hint or command, true)
+  console:dechoLink(dechoText, function() send(command, false) end, hint or command, true)
 end
 
 --- True while the current room is a shop (Room.Info.Basic.environment,
@@ -226,8 +270,9 @@ function mdwui.menuLink(co, dechoText, title, actions, hint)
     local items = {}
     for _, action in ipairs(type(actions) == "function" and actions() or actions) do
       local cmd = action.command
+      -- Silent for the same reason as mdwui.link: a menu row is a click.
       items[#items + 1] = action.separator and { separator = true }
-        or { label = action.label, onClick = action.fn or function() send(cmd) end }
+        or { label = action.label, onClick = action.fn or function() send(cmd, false) end }
     end
     mdw.showContextMenu(title, items)
   end, hint or title, true)

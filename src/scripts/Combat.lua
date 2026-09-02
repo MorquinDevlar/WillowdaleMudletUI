@@ -85,9 +85,11 @@ function mdwui.renderCombat()
     rows[#rows + 1] = { id = id, type = "text", height = g.headerHeight,
       fontSize = g.headerFontSize, text = string.format("<%s>%s", C.charLabel, text) }
   end
-  local function gaugeRow(id, value, max, text, fill, track)
+  -- `backCss` is a finished stylesheet, not a color: the AE track carries the
+  -- bound slice as a gradient, so there is no single color to hand over.
+  local function gaugeRow(id, value, max, text, fill, backCss)
     rows[#rows + 1] = { id = id, type = "gauge", value = value, max = max,
-      text = text, front = mdwui.fillCss(fill), back = mdwui.trackCss(track),
+      text = text, front = mdwui.fillCss(fill), back = backCss,
       fgColor = g.textColor, fontSize = g.fontSize }
   end
 
@@ -123,7 +125,8 @@ function mdwui.renderCombat()
             C.text, enemy.name or "?",
             isTarget and string.format(" <%s>(%s)", C.warn, statusText) or ""),
           -- Click-to-target; bare combat ids need the # prefix (guide 8.8).
-          onClick = function() send("target #" .. tostring(id)) end }
+          -- Silent, like every other click affordance (see mdwui.link).
+          onClick = function() send("target #" .. tostring(id), false) end }
       end
     end
   end
@@ -133,17 +136,17 @@ function mdwui.renderCombat()
     local hp, hpMax = tonumber(vitals.health) or 0, tonumber(vitals.health_max) or 0
     gaugeRow("hp", hp, hpMax,
       string.format("HP %s/%s", mdwui.fmtNum(hp), mdwui.fmtNum(hpMax)),
-      mdwui.hpFillColor(hp, hpMax), g.hpTrack)
+      mdwui.hpFillColor(hp, hpMax), mdwui.trackCss(g.hpTrack))
   end
   if s.ae then
-    local ae, aeMax = tonumber(vitals.aether) or 0, tonumber(vitals.aether_max) or 0
-    gaugeRow("ae", ae, aeMax,
+    local ae, aeMax, aeFill, aeTrack = mdwui.aeGauge(vitals)
+    gaugeRow("ae", aeFill, aeMax,
       string.format("AE %s/%s", mdwui.fmtNum(ae), mdwui.fmtNum(aeMax)),
-      g.aeFill, g.aeTrack)
+      g.aeFill, aeTrack)
   end
   if s.balance then
     local value, max, text, fill = balanceGauge()
-    gaugeRow("balance", value, max, text, fill, g.balTrack)
+    gaugeRow("balance", value, max, text, fill, mdwui.trackCss(g.balTrack))
   end
 
   if s.enemy then
@@ -153,7 +156,7 @@ function mdwui.renderCombat()
         local hp, hpMax = tonumber(enemy.health) or 0, tonumber(enemy.health_max) or 0
         gaugeRow("bar_" .. tostring(enemy.id), hp, hpMax,
           string.format("%s %s/%s", enemy.name or "?", mdwui.fmtNum(hp), mdwui.fmtNum(hpMax)),
-          g.enemyFill, g.enemyTrack)
+          g.enemyFill, mdwui.trackCss(g.enemyTrack))
       end
     end
   end
@@ -226,6 +229,10 @@ end
 function mdwui.setupWidgetMenus()
   if not (mdw and mdw.setWidgetMenu) then return end
   mdw.setWidgetMenu("Combat", combatMenuItems, "Combat")
+  -- The Music menu's items live with its renderer (Music.lua); both menus are
+  -- declared here because a widget menu dies with its widget, so they have to
+  -- be re-declared on every build.
+  mdw.setWidgetMenu("Music", mdwui.musicMenuItems, "Music")
 end
 
 ---------------------------------------------------------------------------
@@ -290,9 +297,11 @@ function mdwui.setupPromptGauges()
   if s.balance then add("balance", g.balFill, g.balTrack) end
   if s.enemy then add("enemy", g.enemyFill, g.enemyTrack) end
   mdw.setPromptGauges(defs)
-  -- Fresh gauges carry their default fills - forget remembered bands.
+  -- Fresh gauges carry their default fills and the plain AE track - forget
+  -- the remembered bands and the remembered reserve.
   mdwui.state.hpFillCss = nil
   mdwui.state.balFillCss = nil
+  mdwui.state.aeTrackCss = nil
   mdwui.updatePromptGauges()
 end
 
@@ -314,8 +323,16 @@ function mdwui.updatePromptGauges()
     mdw.setPromptGaugeStyle("hp", mdwui.fillCss(fill))
   end
 
-  mdw.setPromptGaugeValue("ae", vitals.aether, vitals.aether_max,
-    string.format("AE %s/%s", mdwui.fmtNum(vitals.aether), mdwui.fmtNum(vitals.aether_max)))
+  local ae, aeMax, aeFill, aeTrack = mdwui.aeGauge(vitals)
+  mdw.setPromptGaugeValue("ae", aeFill, aeMax,
+    string.format("AE %s/%s", mdwui.fmtNum(ae), mdwui.fmtNum(aeMax)))
+  -- Restyle only when the bound slice moves, for the same reason as HP's
+  -- bands: Vitals arrives up to 10/sec and the track is otherwise constant.
+  -- The front is passed as nil so MDW keeps the fill it already has.
+  if aeTrack ~= mdwui.state.aeTrackCss then
+    mdwui.state.aeTrackCss = aeTrack
+    mdw.setPromptGaugeStyle("ae", nil, aeTrack)
+  end
 
   local value, max, text, balFill = balanceGauge()
   mdw.setPromptGaugeValue("balance", value, max, text)

@@ -178,6 +178,7 @@ function mdwui.renderAll()
   mdwui.renderCombat()
   mdwui.renderQuests()
   mdwui.renderJournal()
+  mdwui.renderMusic()
   mdwui.renderTopBar()
   mdwui.updatePromptBar()
   mdwui.updatePromptGauges()
@@ -320,6 +321,10 @@ function mdwui.buildUI()
     -- journal's categories plus a Quests category carrying the quest journal
     -- (see Journal.lua). The Quests widget above stays lean.
     { "Journal", mdwui.renderJournal, { dock = "right" } },
+    -- Ambient music: the catalog, the playlist, and the volume levels
+    -- (guide 5.16). It needs no request of its own - both its packages ride
+    -- the full payload buildUI already asks for.
+    { "Music", mdwui.renderMusic, { dock = "right" } },
   }
   -- Asked BEFORE Widget:new, which is the only moment the answer exists: it
   -- returns an existing widget untouched, so afterwards the two cases look
@@ -382,7 +387,7 @@ function mdwui.buildUI()
   local statusStack = defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", created)
   local itemsStack = defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", created)
   defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left", created)
-  defaultGroup({ "Comm", "Quests", "Journal" }, "MDWUI_Comms", "right", created)
+  defaultGroup({ "Comm", "Quests", "Journal", "Music" }, "MDWUI_Comms", "right", created)
   -- AFTER every group exists, never during: see defaultHeight. Until the
   -- character group is created, the items group is the dock's bottom row and
   -- anything set on it is discarded.
@@ -518,6 +523,17 @@ local handlers = {
   ["gmcp.Room.Info.Basic"] = function()
     mdwui.renderQuests()
     mdwui.renderJournal()
+  end,
+
+  -- Music (guide 5.16). The catalog is static for the session and the
+  -- settings arrive after every change, from this client or any other, so
+  -- both simply repaint the widget.
+  ["gmcp.Game.Music"] = function() mdwui.renderMusic() end,
+  ["gmcp.Char.Audio"] = function() mdwui.onCharAudio() end,
+  -- Track-end relay: a playlist track plays once and the client reports the
+  -- end, which is what advances the playlist (guide 5.16).
+  ["sysMediaFinished"] = function(event, fileName, path, mediaType)
+    mdwui.onMediaFinished(event, fileName, path, mediaType)
   end,
 
   ["gmcp.Comm.Channel"] = function() mdwui.onCommChannel() end,

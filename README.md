@@ -8,8 +8,8 @@ GMCP feed:
 ```
 Left dock                      Center            Right dock
   [Affects | Keyring]          Main display        [Map]  (native mapper)
-  [Equipment | Inventory |                          [Comm | Quests | Journal]
-   Forage]
+  [Equipment | Inventory |                          [Comm | Quests | Journal
+   Forage]                                           | Music]
   [Character | Combat | Group]
 ```
 
@@ -28,6 +28,10 @@ Left dock                      Center            Right dock
   Quests category holding the full filterable quest list
 - **Communications** - channel tabs (All / Room / Global / Tells / Group) with
   server-side history on load
+- **Music** - what is playing, sliders for the music and the sound levels, and
+  the world's whole track list: click a title to play it, `[+]` and `[-]` to
+  build your playlist, with repeat, shuffle and who picks the track in the
+  widget's menu
 - **Prompt bar** - your real in-game prompt, delivered over GMCP as ANSI
 - **Map** - Mudlet's native mapper, fed by the server's Client.Map protocol
 - **Numpad walking** - the same keypad shortcuts as the web client: 1-9 walk
@@ -73,6 +77,12 @@ ui theme [<name>|next|prev]           the UI theme (also: ui color)
 ui comm [<tab>|clear]                 channel tabs
 ui prompt [<key> [on|off]]            vitals worth hp ae balance enemy
 ui combat [<key> [on|off]]            hp ae balance enemy info
+ui music                              what is playing, your playlist, levels
+ui music repeat|shuffle [on|off]      playlist flags
+ui music mode server|playlist         who picks the track
+ui music next|stop                    skip a track, or stop the music
+ui music volume <name> <0-100>        music combat movement environment other
+
 ui quest [<id>|back|expand <id>|collapse <id>]
 ui journal [<category>|back|page <n>|open <n>|close <n>|book <n> <page>]
 ui journal zone|status|category <value>             quest-list filters

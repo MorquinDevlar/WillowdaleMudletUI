@@ -136,6 +136,13 @@ mdwui.config = {
     hpFillLow = "rgba(220,60,50,70%)",
     aeTrack = "rgba(120,50,160,20%)",
     aeFill = "rgba(140,70,200,60%)",
+    -- The bound slice of the aether pool (mdwui.aeTrackCss). The web draws
+    -- it as a translucent panel laid OVER the track
+    -- (#gauge-ae-reserved rgba(120,100,140,0.3)) plus a white diagonal hatch;
+    -- a Qt gauge track is a single label with one brush, so this is those two
+    -- web colors already composited - the same pixels a browser produces,
+    -- minus the hatch no Qt stylesheet can repeat.
+    aeReserved = "rgba(120,84,146,44%)",
     balTrack = "rgba(40,80,160,20%)",
     balFill = "rgba(60,110,200,60%)",
     balFillDrain = "rgba(50,90,160,50%)",
@@ -273,6 +280,10 @@ mdwui.state = mdwui.state or {
   questExpanded = {},  -- quest id -> true while its objective lines are open;
                        -- module-lifetime like the web client's questExpanded,
                        -- so frequent re-renders don't snap an open quest shut
+  -- musicPreview (runtime, Music.lua): volume key -> the level a slider drag
+  -- is pointing at, so the row's label can follow the pointer while the
+  -- write waits for the release. Cleared by the Char.Audio push that answers
+  -- it, which is when the server's own numbers take the labels back.
   -- Quest/Journal caches, all seeded lazily (see Quests seedState) so a
   -- state table preserved from an older script run gains them on the fly:
   --   questDetailCache   id -> Char.Quest.Detail payload (web questDetailCache)

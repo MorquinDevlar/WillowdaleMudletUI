@@ -24,6 +24,12 @@
         "isFolder": "no"
     },
     {
+        "name": "Music",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
         "name": "Comm",
         "isActive": "yes",
         "script": "",

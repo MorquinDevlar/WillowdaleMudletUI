@@ -5,7 +5,7 @@
 local WIN_W, WIN_H = 1600, 900
 local H = {
   callbacks = {}, handlers = {}, timers = {}, labels = {},
-  sent = {}, gmcpSent = {}, nextTimerId = 0,
+  sent = {}, sentEcho = {}, gmcpSent = {}, nextTimerId = 0,
   winW = WIN_W, winH = WIN_H,
   -- The MAIN console: where `ui` (and MDW's own notices) talk to the player.
   main = { _echoed = {}, _links = {} },
@@ -135,6 +135,17 @@ function Geyser.Gauge:new(props, container)
   g.back = newElement({ name = props.name .. "_back" }, g)
   g.front = newElement({ name = props.name .. "_front" }, g)
   g.text = newElement({ name = props.name .. "_text" }, g)
+  -- Geyser sizes a gauge's three labels with the gauge itself. Modelled
+  -- because a SLIDER row's mouse maths divides the click's x by the TEXT
+  -- label's width (MDW's sliderValueAt) - children left at zero width make
+  -- every drag land on nothing at all.
+  local baseResize = g.resize
+  function g.resize(gauge, width, height)
+    baseResize(gauge, width, height)
+    for _, part in ipairs({ gauge.back, gauge.front, gauge.text }) do
+      part:resize(width, height)
+    end
+  end
   function g.setValue(gauge, cur, max, text)
     if max ~= nil and max <= 0 then return nil end
     gauge._value, gauge._max = cur, max
@@ -228,7 +239,14 @@ function getScroll(window)
   H.scrolls[#H.scrolls + 1] = { fn = "getScroll", window = window }
   return 0
 end
-function send(cmd) H.sent[#H.sent + 1] = cmd end
+-- The second argument is Mudlet's echo flag (default true): widget click
+-- affordances pass false so the command they stand for never appears in the
+-- main window as if the player had typed it. Recorded alongside the command,
+-- so a test can check the silence as well as the text.
+function send(cmd, echo)
+  H.sent[#H.sent + 1] = cmd
+  H.sentEcho[#H.sentEcho + 1] = echo
+end
 function sendGMCP(pkg, payload) H.gmcpSent[#H.gmcpSent + 1] = pkg .. " " .. (payload or "") end
 function ansi2decho(s) return s end
 
