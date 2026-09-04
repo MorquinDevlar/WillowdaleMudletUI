@@ -28,10 +28,13 @@ Left dock                      Center            Right dock
   Quests category holding the full filterable quest list
 - **Communications** - channel tabs (All / Room / Global / Tells / Group) with
   server-side history on load
-- **Music** - what is playing, sliders for the music and the sound levels, and
-  the world's whole track list: click a title to play it, `[+]` and `[-]` to
-  build your playlist, with repeat, shuffle and who picks the track in the
-  widget's menu
+- **Music** - a volume slider over the world's whole track list: click a title
+  to play it, tick the box beside it to put it in your playlist, with Repeat
+  and Shuffle under the list (the sound levels, the mode, next and stop are
+  `ui music` verbs)
+- **Connection Stats** - what this session costs on the wire: transport,
+  compression, the bytes sent against the bytes that reached the socket, and
+  the share saved. Closed by default; the gear menu at the top left opens it
 - **Prompt bar** - your real in-game prompt, delivered over GMCP as ANSI
 - **Map** - Mudlet's native mapper, fed by the server's Client.Map protocol
 - **Numpad walking** - the same keypad shortcuts as the web client: 1-9 walk
@@ -82,6 +85,7 @@ ui music repeat|shuffle [on|off]      playlist flags
 ui music mode server|playlist         who picks the track
 ui music next|stop                    skip a track, or stop the music
 ui music volume <name> <0-100>        music combat movement environment other
+ui connection                         what this session costs on the wire
 
 ui quest [<id>|back|expand <id>|collapse <id>]
 ui journal [<category>|back|page <n>|open <n>|close <n>|book <n> <page>]
@@ -90,7 +94,7 @@ ui journal zone|status|category <value>             quest-list filters
 ui refresh [<what>]                   re-request all GMCP data, or one part:
                                       character vitals inventory equipment
                                       keyring forage affects quests journal
-                                      comm room group map
+                                      comm room group map connection
 ui debug [gmcp [<path>]]              UI diagnostics, or dump the GMCP data
                                       (ui debug gmcp Char.Vitals)
 ui reset [all] confirm                back to the default layout
@@ -129,11 +133,11 @@ integration contract (it only seeds tables at load time and MDW invokes it
 whenever its UI builds). Widget arrangement is yours after the first run: MDW
 persists your layout, and the default grouping never overrides it.
 
-**MDW 0.6.9 or newer is required, and this package installs it for you.**
+**MDW 0.7.0 or newer is required, and this package installs it for you.**
 Install the UI on its own and it fetches the MDW release it was built against,
 then builds the interface once MDW lands - Mudlet resolves no package
 dependencies itself. If that download cannot be made (no network, GitHub
-blocked) it declines to build and prints a single `needs MDW 0.6.9 or newer`
+blocked) it declines to build and prints a single `needs MDW 0.7.0 or newer`
 line on the main console with the URL, rather than half a UI. MDW is never
 downgraded: a newer one than the minimum is left alone.
 

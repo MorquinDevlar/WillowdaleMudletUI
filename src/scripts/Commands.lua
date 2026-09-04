@@ -254,6 +254,7 @@ mdwui.widgetSynonyms = {
   grp = "Group", party = "Group",
   fight = "Combat", buffs = "Affects", effects = "Affects",
   music = "Music", audio = "Music", playlist = "Music",
+  conn = "Connection", net = "Connection", bandwidth = "Connection",
 }
 
 --- Widgets are addressed by TITLE in output, matching the tab labels the
@@ -369,7 +370,7 @@ end
 -- way a player thinks about the screen ("my equipment", "the map") rather
 -- than the way the namespaces nest, so one word refills one widget.
 local REFRESH_ORDER = { "all", "character", "vitals", "inventory", "equipment", "keyring",
-  "forage", "affects", "quests", "journal", "comm", "room", "group", "map" }
+  "forage", "affects", "quests", "journal", "comm", "room", "group", "map", "connection" }
 local REFRESH_NODES = {
   character = { "Char.Info", "Char.Attributes", "Char.Worth" },
   vitals = { "Char.Vitals" },
@@ -384,6 +385,9 @@ local REFRESH_NODES = {
   room = { "Room.Info" },
   group = { "Group" },
   map = { "Client.Map" },
+  -- Not in `all`: SendFullPayload is the login batch and Game.Connection is
+  -- pull-only, outside it (guide 5.17). Named, it is one request like the rest.
+  connection = { "Game.Connection" },
 }
 
 -- A whole payload is thousands of lines; the cap is what keeps `ui debug
@@ -526,6 +530,54 @@ local function questRowKey(id)
     if tostring(quest.id) == tostring(id) then return "a:" .. tostring(id) end
   end
   return "d:" .. tostring(id)
+end
+
+---------------------------------------------------------------------------
+-- CONNECTION FIGURES
+-- Printed on ARRIVAL, not when `ui connection` runs: Game.Connection is
+-- pull-only (guide 5.17), so at the moment the player types there is nothing
+-- current to print. The window is what keeps that honest in the other
+-- direction - an answer that came back long after they gave up, or one of the
+-- Connection Stats widget's own 2s polls, must not print a block nobody asked
+-- for.
+---------------------------------------------------------------------------
+
+local CONNECTION_ANSWER_WINDOW = 15
+local CONNECTION_LABEL_COLUMN = 20
+
+--- Print the figures, if this package asked for them recently. Called from
+-- the gmcp.Game.Connection handler once the widget has repainted.
+function mdwui.reportConnection()
+  local askedAt = mdwui.state.connectionAskedAt
+  if not askedAt or (os.time() - askedAt) > CONNECTION_ANSWER_WINDOW then return end
+  mdwui.state.connectionAskedAt = nil
+
+  local c = mdwui.tbl(mdwui.tbl(gmcp and gmcp.Game).Connection)
+  local transport, compression, state = mdwui.connectionText(c)
+  mdwui.say("Session bandwidth")
+  local function row(label, value, colour)
+    line(string.format("  <%s>%s<%s>%s", P.head, cell(label, CONNECTION_LABEL_COLUMN),
+      colour or P.text, value))
+  end
+  row("Transport", transport)
+  row("Compression", compression)
+  row("State", state, c.active and P.good or P.bad)
+  row("Expanded", mdwui.fmtBytes(c.bytes_sent))
+  -- Nothing measured yet means the derived fields are UNAVAILABLE, not zero
+  -- (guide 5.17) - so the three rows that need a wire count are not printed
+  -- at all rather than printed as nothing saved.
+  if c.measured then
+    row("Wire sent", mdwui.fmtBytes(c.bytes_wire))
+    row("Saved", string.format("%s (%.1f%%, %.2f:1)", mdwui.fmtBytes(c.bytes_saved),
+      tonumber(c.saved_pct) or 0, tonumber(c.ratio) or 0), P.good)
+  else
+    line(string.format("  <%s>No wire bytes counted yet - nothing to compare against.", P.dim))
+  end
+  -- The same caveat the widget carries, and transport-dependent for the same
+  -- reason: telnet figures are exact, HTTPS ones sit under TLS framing.
+  line(string.format("  <%s>%s", P.dim, (c.transport == "telnet")
+    and "Counted server-side at the socket; telnet figures are exact."
+    or "Counted server-side at the socket, under TLS framing - the real ratio is a little better."))
 end
 
 COMMANDS = {
@@ -1281,6 +1333,20 @@ COMMANDS = {
       mdwui.say("Journal: " .. word .. ".")
     end },
 
+  { name = "connection", aliases = { "conn", "bandwidth" },
+    usage = "ui connection",
+    help = "What this session has cost on the wire: transport, compression, and the bytes "
+      .. "saved. Only the server can measure it, so this asks and prints the answer when it "
+      .. "lands. The Connection Stats widget shows the same figures live.",
+    run = function()
+      -- A timestamp, not a flag, for the reason the updater's guards are: a
+      -- request that is never answered must not leave the next arrival - the
+      -- widget's own poll, minutes later - printing an unasked-for block.
+      mdwui.state.connectionAskedAt = os.time()
+      mdwui.requestConnection()
+      mdwui.say("Asking the server for this session's connection figures...")
+    end },
+
   { name = "numpad",
     usage = "ui numpad [on|off]",
     help = "Numpad walking. While it is on the keypad walks instead of typing digits "
@@ -1671,6 +1737,15 @@ local OVERVIEW = {
         return (audio.mode and audio.mode ~= "") and tostring(audio.mode) or "-"
       end,
       opts = "repeat|shuffle|mode|next|stop|volume <name> <0-100>" },
+    -- The value is the one figure the command exists to report, from whatever
+    -- the last answer held; "-" until something has been asked for.
+    { cmd = "connection", link = "connection",
+      value = function()
+        local c = mdwui.tbl(mdwui.tbl(gmcp and gmcp.Game).Connection)
+        if not c.measured then return "-" end
+        return string.format("%.0f%%", tonumber(c.saved_pct) or 0)
+      end,
+      opts = "what this session costs on the wire (the Connection Stats widget)" },
   } },
   { title = "Quests and Journal widget:", colour = P.verbPanels, rows = {
     { cmd = "quest", link = "quest",

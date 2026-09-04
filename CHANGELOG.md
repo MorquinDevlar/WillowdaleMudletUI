@@ -23,23 +23,30 @@ out of the version number alone - so neither may change.
 ## Unreleased
 
 ### Added
-- The AE gauge shows the part of your aether that is bound. A Weaver's
-  Spirit Shield holds a share of the pool in reserve and recovery cannot
-  refill past what is left, so that share now sits as a dimmed segment at the
-  full end of the bar, in the prompt bar and the Combat widget alike, with
-  your aether running up to meet it. The numbers beside the bar stay your
-  true current and maximum. Nothing bound looks exactly as it always has.
-- A Music widget, in the right dock beside the Journal. It shows what is
-  playing and every track the world has, with sliders for the music and for
-  the combat, movement, environment and other sound levels. Click a title to
-  play it, click the plus beside it to put it in your playlist and the minus
-  to take it out, and click what is playing to stop it. The widget's menu
-  holds repeat, shuffle, whether the world or your playlist picks the track,
-  and next and stop.
-- `ui music` does all of that from the keyboard. Type it on its own for what
-  is playing, your playlist and your levels, then `ui music repeat on`,
-  `ui music shuffle off`, `ui music mode server`, `ui music next`,
-  `ui music stop`, or `ui music volume combat 40`.
+- A Connection Stats panel: transport, whether compression is running and
+  which kind, the bytes the server sent, the bytes that reached the socket,
+  and the share saved with its ratio. Only the server can measure this, so the
+  panel asks for it every two seconds while it is open and does not ask at all
+  while it is closed. Refresh at the top of the panel asks on demand.
+- The panel starts closed. The gear menu at the top left opens it, and that
+  menu now carries this UI's own entries above Rebuild UI and Uninstall.
+- `ui connection` prints the same figures in the main window. `ui show conn`
+  opens the panel; `ui refresh connection` pulls fresh numbers without it.
+- The AE gauge shows the part of your aether that is bound. A Weaver's Spirit
+  Shield holds a share of the pool in reserve and recovery cannot refill past
+  what is left, so that share sits as a dimmed segment at the full end of the
+  bar, in the prompt bar and the Combat widget, with your aether running up to
+  meet it. The numbers beside the bar stay your true current and maximum.
+  With nothing bound the gauge looks exactly as it always has.
+- A Music widget, in the right dock beside the Journal: a volume slider, then
+  every track the world has, with a box for your playlist and the title to
+  click to play it. Whatever is playing is highlighted. Repeat and Shuffle sit
+  under the list.
+- `ui music` does the rest from the keyboard: bare for what is playing, your
+  playlist and your levels, then `ui music repeat on`, `ui music shuffle off`,
+  `ui music mode server|playlist` for who picks the track, `ui music next`,
+  `ui music stop`, and `ui music volume combat 40` for any of the four sound
+  levels.
 
 ### Changed
 - Clicking something in a widget no longer echoes the command it stands for

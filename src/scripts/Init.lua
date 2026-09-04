@@ -179,6 +179,7 @@ function mdwui.renderAll()
   mdwui.renderQuests()
   mdwui.renderJournal()
   mdwui.renderMusic()
+  mdwui.renderConnection()
   mdwui.renderTopBar()
   mdwui.updatePromptBar()
   mdwui.updatePromptGauges()
@@ -325,6 +326,12 @@ function mdwui.buildUI()
     -- (guide 5.16). It needs no request of its own - both its packages ride
     -- the full payload buildUI already asks for.
     { "Music", mdwui.renderMusic, { dock = "right" } },
+    -- What the session costs on the wire (guide 5.17). CLOSED on a first
+    -- run - see below - so it is the one widget here whose default is not to
+    -- be there: it answers a question a player asks occasionally, and the
+    -- node behind it is pull-only, so an open panel is a request every two
+    -- seconds. The gear menu is where it is reopened from.
+    { "Connection", mdwui.renderConnection, { dock = "right", title = "Connection Stats" } },
   }
   -- Asked BEFORE Widget:new, which is the only moment the answer exists: it
   -- returns an existing widget untouched, so afterwards the two cases look
@@ -355,6 +362,12 @@ function mdwui.buildUI()
     dock = "right",
   })
   mdwui.state.widgets["Comm"] = true
+
+  -- Closed on a first run only, by the same test defaultGroup uses: once the
+  -- player has a saved layout, where this panel sits and whether it is open
+  -- belong to them. hideWidget on a lone group hides the group, and
+  -- mdw.showWidget puts it back at the end of the dock it came from.
+  if created["Connection"] and mdw.hideWidget then mdw.hideWidget("Connection") end
 
   -- Default grouping (first run only - see defaultGroup). Order builds the
   -- left dock top-to-bottom; the last group in each dock auto-fills.
@@ -404,6 +417,11 @@ function mdwui.buildUI()
   mdwui.setupPromptGauges()
   mdwui.setupPromptBarMenu()
   mdwui.setupWidgetMenus()
+  -- The gear-menu row that reopens the Connection Stats panel, and the poll
+  -- that feeds it. Both re-declared per build: addMenuItem replaces its row
+  -- by id, and killAllTimers above has already taken the previous poll.
+  mdwui.setupConnectionMenu()
+  mdwui.startConnectionPoll()
 
   -- Numpad walking. Not a widget, but this is the first point where the
   -- player's saved choice exists: MDW restores mdw.gameSettings in
@@ -530,6 +548,15 @@ local handlers = {
   -- both simply repaint the widget.
   ["gmcp.Game.Music"] = function() mdwui.renderMusic() end,
   ["gmcp.Char.Audio"] = function() mdwui.onCharAudio() end,
+
+  -- Connection stats (guide 5.17). Pull-only: this only ever fires as the
+  -- answer to a request of ours - the widget's poll, its Refresh row, or
+  -- `ui refresh connection`.
+  ["gmcp.Game.Connection"] = function()
+    mdwui.renderConnection()
+    -- ...and, if `ui connection` is what asked, print it to the main console.
+    mdwui.reportConnection()
+  end,
   -- Track-end relay: a playlist track plays once and the client reports the
   -- end, which is what advances the playlist (guide 5.16).
   ["sysMediaFinished"] = function(event, fileName, path, mediaType)

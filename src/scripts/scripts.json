@@ -30,6 +30,12 @@
         "isFolder": "no"
     },
     {
+        "name": "Connection",
+        "isActive": "yes",
+        "script": "",
+        "isFolder": "no"
+    },
+    {
         "name": "Comm",
         "isActive": "yes",
         "script": "",

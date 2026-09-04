@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.6.9) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.7.0) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
@@ -64,6 +64,13 @@ installed even when the build was refused under an old MDW.
 - Default grouping runs ONLY on a first run: `defaultGroup` skips any widget
   with `_pendingStackId` because a saved MDW layout owns placement. Widgets
   "not regrouping" after the player rearranged them is correct behavior.
+- The Connection widget is the one PULL-ONLY panel (guide 5.17). Nothing
+  pushes `Game.Connection`, so `Connection.lua` owns a 2s poll - and the poll
+  is gated on `mdw.isWidgetShown`, because a closed panel must not cost the
+  connection a request every two seconds for a session. It is also the one
+  widget CLOSED on a first run (`created["Connection"]`, the same test
+  `defaultGroup` uses), which is what the gear-menu row exists to undo; a
+  saved layout owns its visibility from then on.
 
 ## The typeface
 
@@ -204,6 +211,15 @@ checks the JSON against the web client's `codeShortcuts`.
 `mdwui.applyNumpadKeys` (called from `buildUI`) re-applies the folder's on/off
 state on every build. Rule: every new widget or player-facing toggle gets a
 `ui` verb and a smoke check in the same change.
+
+The gear (admin) dropdown is MDW's, and `mdw.addMenuItem` (MDW 0.7, which is
+what the current pin buys) is how this package puts a row in it -
+`mdwui.setupConnectionMenu`, declared from `buildUI` so MDW stamps the row with
+this package and reaps it with us. Unguarded, like every other MDW call inside
+`buildUI`: the row is not a garnish, since the Connection panel is closed on a
+first run and the gear is where a player finds it. `mdwui.onUninstall`
+withdraws it by hand all the same, because `mdw.gameMenu` survives a teardown
+and the order of two `sysUninstallPackage` handlers is not ours to choose.
 
 ## Version exposure (Willowdale package convention)
 

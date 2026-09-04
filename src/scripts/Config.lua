@@ -45,7 +45,13 @@ mdwui.version = "0.3.0"
 -- cannot do for itself. The pre-0.6.0 path is kept as a fallback, because the
 -- version gate stops this package BUILDING under an older MDW but `ui update
 -- install` still works there, and that is how a player gets out of it.
-mdwui.minMdwVersion = "0.6.9"
+--
+-- 0.7.0 IS an API adoption: mdw.addMenuItem. The Connection Stats panel is
+-- CLOSED on a first run, so the gear-menu row is the affordance a player
+-- finds it by - which makes the API load-bearing for that widget rather than
+-- decorative, and the gate the right place to require it instead of a guard
+-- at the one call site.
+mdwui.minMdwVersion = "0.7.0"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
@@ -124,10 +130,15 @@ mdwui.config = {
   hpLowPct = 0.33,
   hpMidPct = 0.66,
 
-  -- Graphical gauges (prompt layer, Combat widget, Group widget). The Qt
-  -- colors transcribe webclient.css exactly: translucent track, 60%-alpha
-  -- fill, #333 frame, 4px radius; HP's fill shifts amber/red at the shared
-  -- thresholds, Balance dims while draining, group members band by percent.
+  -- Graphical gauges (prompt layer, Combat widget, Group widget, and the
+  -- Music widget's volume slider). The Qt colors transcribe webclient.css
+  -- exactly: translucent track, 60%-alpha fill, #333 frame, 4px radius; HP's
+  -- fill shifts amber/red at the shared thresholds, Balance dims while
+  -- draining, group members band by percent.
+  --
+  -- One palette for the whole UI, so an MDW theme keeps applying: a widget
+  -- that copied its own colors out of the web client's CSS would be the one
+  -- surface a theme could not reach.
   gauges = {
     frame = "border: 1px solid #333333; border-radius: 4px;",
     hpTrack = "rgba(40,130,55,20%)",
@@ -136,7 +147,7 @@ mdwui.config = {
     hpFillLow = "rgba(220,60,50,70%)",
     aeTrack = "rgba(120,50,160,20%)",
     aeFill = "rgba(140,70,200,60%)",
-    -- The bound slice of the aether pool (mdwui.aeTrackCss). The web draws
+    -- The bound slice of the aether pool (mdwui.aeGauge). The web draws
     -- it as a translucent panel laid OVER the track
     -- (#gauge-ae-reserved rgba(120,100,140,0.3)) plus a white diagonal hatch;
     -- a Qt gauge track is a single label with one brush, so this is those two
@@ -280,10 +291,6 @@ mdwui.state = mdwui.state or {
   questExpanded = {},  -- quest id -> true while its objective lines are open;
                        -- module-lifetime like the web client's questExpanded,
                        -- so frequent re-renders don't snap an open quest shut
-  -- musicPreview (runtime, Music.lua): volume key -> the level a slider drag
-  -- is pointing at, so the row's label can follow the pointer while the
-  -- write waits for the release. Cleared by the Char.Audio push that answers
-  -- it, which is when the server's own numbers take the labels back.
   -- Quest/Journal caches, all seeded lazily (see Quests seedState) so a
   -- state table preserved from an older script run gains them on the fly:
   --   questDetailCache   id -> Char.Quest.Detail payload (web questDetailCache)
@@ -296,8 +303,12 @@ mdwui.state = mdwui.state or {
   -- top bar's connection timer counts up from; refreshed by
   -- sysConnectionEvent, seeded at build as a fallback for mid-session
   -- installs.
-  -- hpFillCss / balFillCss (runtime): last-applied prompt-gauge fill
-  -- styles, so the per-payload updates only restyle on a band crossing
+  -- hpFillCss / balFillCss / aeTrackCss (runtime): the last-applied
+  -- prompt-gauge styles - the two fill colours, and the AE track carrying the
+  -- bound slice - so the per-payload updates only restyle on a band crossing
+  -- or a move of the reserve. Seeded by setupPromptGauges with what it just
+  -- declared, and cleared by the mdw.onTeardown hook with the gauges they
+  -- describe.
   -- Self-update keys (Update, all runtime): updateBusyAt (os.time() of
   -- the download in flight - a timestamp, so a stalled one goes stale),
   -- updateFeedPath / updateFile / updateUrl (what we asked for, matched
@@ -310,6 +321,11 @@ mdwui.state = mdwui.state or {
   -- before it fires and a stale one has to re-arm), updateCheckedThisSession,
   -- and updateInstalled - the all-clear the watchdog reads, which only works
   -- because this table survives the package swap in the Lua state.
+  -- connectionAskedAt (Connection/Commands, runtime): os.time() when `ui
+  -- connection` last asked. Game.Connection is pull-only, so the answer is
+  -- printed on ARRIVAL - and a timestamp, not a flag, so an answer that came
+  -- back long after the question (or one of the widget's own 2s polls) prints
+  -- nothing.
   -- MDW bootstrap keys (Update, runtime): mdwFile (the download in
   -- flight, matched against sysDownloadDone's path) and mdwFetchedFor - the
   -- minMdwVersion the last bootstrap attempt was made for, so a dead network
@@ -386,6 +402,15 @@ end
 mdw.onTeardown = mdw.onTeardown or {}
 mdw.onTeardown[mdwui.packageName] = function()
   if mdwui and mdwui.killAllTimers then mdwui.killAllTimers() end
+  -- The prompt-gauge memos describe gauges that die with this teardown, and
+  -- MDW rebuilds the row from its DECLARED styles before onReady runs. A memo
+  -- that outlived its gauge would make the first payload after a build that
+  -- never reached setupPromptGauges (an error earlier in buildUI, or the
+  -- version gate refusing) skip the restyle a low band or a held reserve
+  -- needs.
+  if mdwui and mdwui.state then
+    mdwui.state.hpFillCss, mdwui.state.balFillCss, mdwui.state.aeTrackCss = nil, nil, nil
+  end
 end
 
 -- Register for co-removal: MDW's one-button full uninstall removes this

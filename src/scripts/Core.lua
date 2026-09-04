@@ -132,43 +132,41 @@ function mdwui.hpFillColor(cur, max)
   return cfg.gauges.hpFill
 end
 
---- AE track CSS carrying the bound slice of the pool (guide 8.3
--- `aether_reserved`, web _setGaugeReserved). The bar keeps spanning the TRUE
--- maximum: the slice is pinned at the full end, so the fill - still scaled
--- against that maximum - runs up to meet it and a pool at its capped ceiling
--- reads as full. Nothing bound returns the plain track byte for byte, so
--- everyone without a reserve keeps the gauge they have always had.
+--- The AE gauge as both surfaces draw it: the value the FILL takes, the TRUE
+-- maximum, the label, and the track CSS (guide 5.1 `aether_reserved`, web
+-- updatePromptBar + _setGaugeReserved). The bar keeps spanning the true
+-- maximum: the bound slice is pinned at the full end, so the fill - still
+-- scaled against that maximum - runs up to meet it and a pool at its capped
+-- ceiling reads as full. A reserve covering the whole pool leaves no fill at
+-- all, while the label keeps the true current/max. Nothing bound returns the
+-- plain track byte for byte, so everyone without a reserve keeps the gauge
+-- they have always had; the field is absent on an older server and 0 for
+-- everyone holding nothing.
 --
 -- The web puts the slice in its own div over the track; a Geyser gauge is
 -- three labels and the track is one of them, so it lives in the track's own
--- brush instead - two identical stops a ten-thousandth apart, which is how a
--- Qt gradient draws a boundary rather than a blend.
-function mdwui.aeTrackCss(reserved, max)
-  local g = mdwui.config.gauges
-  reserved, max = tonumber(reserved) or 0, tonumber(max) or 0
-  if reserved <= 0 or max <= 0 then return mdwui.trackCss(g.aeTrack) end
-  -- Everything bound: no boundary left to draw, and no fill to meet it.
-  if reserved >= max then return mdwui.trackCss(g.aeReserved) end
-  local edge = 1 - reserved / max
-  return string.format(
-    "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
-      .. "stop:0 %s, stop:%.4f %s, stop:%.4f %s, stop:1 %s); %s",
-    g.aeTrack, edge, g.aeTrack, math.min(1, edge + 0.0001), g.aeReserved,
-    g.aeReserved, g.frame)
-end
-
---- The AE gauge as both surfaces draw it: current, true max, the value the
--- FILL takes, and the track CSS. Only the fill differs from the numbers -
--- a reserve covering the whole pool leaves no fill at all (web
--- updatePromptBar), while the label keeps the true current/max.
+-- brush instead - two stops one ten-thousandth apart, which is how a Qt
+-- gradient draws a boundary rather than a blend. Both stops come from ONE
+-- integer: Qt collapses stops that land on the same position (setColorAt
+-- replaces the colour), and "%.4f" of edge and edge + 0.0001 print the same
+-- string for every odd/32 ratio (10 of 320), which turned the edge into a
+-- blend across the whole bar.
 function mdwui.aeGauge(vitals)
+  local g = mdwui.config.gauges
   vitals = vitals or {}
   local cur = tonumber(vitals.aether) or 0
   local max = tonumber(vitals.aether_max) or 0
-  -- Absent on an older server, and 0 for everyone holding nothing.
   local reserved = tonumber(vitals.aether_reserved) or 0
-  local fill = (max > 0 and reserved >= max) and 0 or cur
-  return cur, max, fill, mdwui.aeTrackCss(reserved, max)
+  local text = string.format("AE %s/%s", mdwui.fmtNum(cur), mdwui.fmtNum(max))
+  if reserved <= 0 or max <= 0 then return cur, max, text, mdwui.trackCss(g.aeTrack) end
+  -- Everything bound: no boundary left to draw, and no fill to meet it.
+  if reserved >= max then return 0, max, text, mdwui.trackCss(g.aeReserved) end
+  local edge = math.floor((1 - reserved / max) * 10000)
+  return cur, max, text, string.format(
+    "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+      .. "stop:0 %s, stop:%.4f %s, stop:%.4f %s, stop:1 %s); %s",
+    g.aeTrack, edge / 10000, g.aeTrack, (edge + 1) / 10000, g.aeReserved,
+    g.aeReserved, g.frame)
 end
 
 --- Group-member fill color (gmcp-ui.js groupHealthClass bands: 75/40/15).
@@ -497,6 +495,11 @@ function mdwui.onUninstall(_, package)
   -- in the layout file on purpose: a package UPDATE fires uninstall too.
   if mdw and mdw.setPromptGauges then mdw.setPromptGauges(nil) end
   if mdw and mdw.setPromptBarMenu then mdw.setPromptBarMenu(nil) end
+  -- ...and our gear-menu row, for the same reason: mdw.gameMenu survives a
+  -- teardown by design, so a row left behind would outlive the package and
+  -- click into a widget that no longer exists. MDW's ownership reap gets it
+  -- too, but only if its handler runs before we clear mdw.gamePackages below.
+  if mdw and mdw.removeMenuItem then mdw.removeMenuItem("connection") end
   -- The top bar too. MDW's own ownership reap would get it, but only if its
   -- handler sees our mdw.gamePackages entry before we clear it below - the
   -- event handler order is not ours to rely on.

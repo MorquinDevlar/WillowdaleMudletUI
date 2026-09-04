@@ -1,7 +1,20 @@
 --[[
   Music.lua
-  The Music widget: what is playing, the five volume levels, and the catalog
-  the player plays from and builds a playlist with (guide section 5.16).
+  The Music widget: the master volume, and the catalog the player plays from
+  and builds a playlist with (guide section 5.16).
+
+  The LAYOUT is the web client's "Sound & Music" panel: a bare volume slider,
+  the "Music" header, the hint, the catalog with a playlist checkbox per row,
+  and Repeat/Shuffle under it. Only the layout - the colours are this
+  package's own, so MDW themes keep reaching this widget like every other.
+
+  Two things the web panel has are deliberately absent. Its Mute checkbox
+  silences the browser's own players without touching the stored level, and
+  Mudlet has no primitive that does that, so a box that only pretended to
+  would be worse than none. Its four sound-effect sliders are display:none
+  there because nothing plays through those categories yet; here they are
+  `ui music volume <name>` instead. Next, stop and the mode are `ui music`
+  verbs for the same reason - the panel does not show them either.
 
   Two packages feed it and it asks for neither: Game.Music is the shared
   catalog (fixed for the life of the server process) and Char.Audio this
@@ -39,17 +52,6 @@ local AUDIO_FIELDS = { "mode", "playlist", "repeat", "shuffle", "volumes",
 -- widget and `ui music` both list them. `environment` is reserved - nothing
 -- plays through it yet - but it is a real level the server stores.
 mdwui.audioCategories = { "combat", "movement", "environment", "other" }
-
--- The five volume rows: the music level plus one per category. `music` is
--- the odd one out on the wire (music_volume, not volumes.music), which is
--- why the row id is not simply the wire key.
-local VOLUME_ROWS = {
-  { key = "music", label = "Music" },
-  { key = "combat", label = "Combat" },
-  { key = "movement", label = "Movement" },
-  { key = "environment", label = "Environment" },
-  { key = "other", label = "Other" },
-}
 
 local function jsonString(s)
   return '"' .. tostring(s):gsub('[\\"]', "\\%0") .. '"'
@@ -146,12 +148,13 @@ local function playlistIds()
   return out
 end
 
---- This track's 1-based place in the playlist, or nil when it is not in it.
-local function playlistPosition(id)
-  for i, entry in ipairs(playlistIds()) do
-    if entry == id then return i end
+--- Is this track in the playlist? That membership is all a checkbox shows -
+-- the web panel numbers nothing.
+local function inPlaylist(id)
+  for _, entry in ipairs(playlistIds()) do
+    if entry == id then return true end
   end
-  return nil
+  return false
 end
 
 local function addToPlaylist(id)
@@ -166,13 +169,6 @@ local function removeFromPlaylist(id)
     if entry ~= id then out[#out + 1] = entry end
   end
   mdwui.audioSet({ playlist = out })
-end
-
---- The level one row shows, from whichever field of Char.Audio holds it.
-local function volumeLevel(key)
-  local a = audio()
-  if key == "music" then return tonumber(a.music_volume) or 0 end
-  return tonumber(mdwui.tbl(a.volumes)[key]) or 0
 end
 
 --- Set one level. Shared by the sliders and `ui music volume`, so the mouse
@@ -190,24 +186,16 @@ end
 -- THE WIDGET
 ---------------------------------------------------------------------------
 
---- Remember what a drag is pointing at, so the row's LABEL can follow the
--- pointer. MDW keeps the slider's value under the hand and never invents a
--- label, so the number beside the word is ours to write on every move; the
--- Char.Audio push that follows the release clears this and the truth paints.
-local function setPreview(key, value)
-  local preview = mdwui.state.musicPreview
-  if not preview then
-    preview = {}
-    mdwui.state.musicPreview = preview
-  end
-  preview[key] = value
+--- A checkbox drawn in text, the whole thing one clickable cell. The web
+-- panel's LAYOUT is what this widget copies; the colours stay the package's
+-- own (C.link, like every other affordance here), so an MDW theme reaches
+-- this widget the way it reaches the rest of the UI.
+local function checkbox(on)
+  return string.format("<%s>[%s]", mdwui.config.colors.link, on and "x" or " ")
 end
 
---- Repaint from Game.Music and Char.Audio. `rowsOnly` re-declares the row
--- block and leaves the console alone - that is the drag path, where the only
--- thing that changed is one slider's label and rebuilding the track list
--- would tear down and recreate its links on every mouse move.
-function mdwui.renderMusic(rowsOnly)
+--- Repaint from Game.Music and Char.Audio.
+function mdwui.renderMusic()
   local widget = mdwui.w("Music")
   if not widget then return end
   -- Under an MDW predating the rows API the widget simply stays empty.
@@ -217,64 +205,44 @@ function mdwui.renderMusic(rowsOnly)
   local g = cfg.gauges
   local a = audio()
   local playing = mdwui.musicTrack(a.track)
-  local preview = mdwui.state.musicPreview or {}
-  -- A build without slider rows still shows the levels, as plain gauges
+  -- A build without slider rows still shows the level, as a plain gauge
   -- (MDW's own advice for the capability, and the reason rowTypes exists).
   local slider = mdw.rowTypes and mdw.rowTypes.slider
 
-  local rows = {}
-  -- What is playing, with the mode on the right. Clicking it stops the music
-  -- ({"track":""}), which is why the row is only clickable while something
-  -- is playing - there is nothing to stop otherwise.
-  rows[#rows + 1] = {
-    id = "now", type = "text",
-    text = string.format("<%s>%s", playing and C.charHeader or C.dim,
-      playing and (playing.title or playing.id) or "Nothing playing"),
-    rightText = (a.mode and a.mode ~= "")
-      and string.format("<%s>%s", C.charLabel, mdwui.titleCase(a.mode)) or nil,
-    onClick = playing and function() mdwui.audioSet({ track = "" }) end or nil,
+  -- The master volume, unlabelled and unnumbered like the web panel's: it is
+  -- the only slider here, so there is nothing for a word to tell apart. No
+  -- onPreview either - with no label to relabel, a drag has nothing to say
+  -- until it commits. The four sound-effect levels are `ui music volume`
+  -- only: nothing in this game plays through them yet, and the web panel
+  -- hides its own category sliders for the same reason.
+  local volume = {
+    id = "vol_music", type = slider and "slider" or "gauge",
+    value = tonumber(a.music_volume) or 0, max = 100, step = 5, text = "",
+    front = mdwui.fillCss(g.aeFill), back = mdwui.trackCss(g.aeTrack),
+    fgColor = g.textColor, fontSize = g.fontSize,
   }
-
-  for _, def in ipairs(VOLUME_ROWS) do
-    local key = def.key
-    local level = preview[key] or volumeLevel(key)
-    -- The music level takes the AE pair and the categories the balance pair,
-    -- so the one bar that carries the music reads apart from the four that
-    -- carry the sound effects.
-    local fill = (key == "music") and g.aeFill or g.balFill
-    local track = (key == "music") and g.aeTrack or g.balTrack
-    local row = {
-      id = "vol_" .. key, type = slider and "slider" or "gauge",
-      value = level, max = 100, step = 5,
-      text = string.format("%s %d", def.label, level),
-      front = mdwui.fillCss(fill), back = mdwui.trackCss(track),
-      fgColor = g.textColor, fontSize = g.fontSize,
-    }
-    if slider then
-      -- A preview NEVER writes: the server would answer every mouse move
-      -- with a Char.Audio push and a re-sent track. The label follows the
-      -- hand, the write waits for the release.
-      row.onPreview = function(value)
-        setPreview(key, value)
-        mdwui.renderMusic(true)
-      end
-      row.onChange = function(value)
-        setPreview(key, value)
-        mdwui.setMusicVolume(key, value)
-      end
-    end
-    rows[#rows + 1] = row
+  if slider then
+    volume.onChange = function(value) mdwui.setMusicVolume("music", value) end
   end
-
+  local rows = {
+    volume,
+    -- Same header style as the Combat widget's sections (Combat.lua's
+    -- `header`), so the two panels read as one UI.
+    { id = "hdr", type = "text", height = g.headerHeight, fontSize = g.headerFontSize,
+      text = string.format("<%s>Music", C.charLabel) },
+    { id = "hint", type = "text", fontSize = g.headerFontSize,
+      text = string.format("<%s>Click title to play. Check box to add to playlist.",
+        C.dim) },
+  }
   mdw.setWidgetRows("Music", rows)
-  if rowsOnly then return end
 
   local co = widget.content
   co:clear()
   -- The server sends no MSP at all while this is off, whatever the rest of
   -- the payload says (guide 5.16), so say so before the list of things that
-  -- will not play. `config sound on` is a real typed command, unlike every
-  -- other affordance here.
+  -- will not play. Kept although the web panel has no such line: there a
+  -- silent click is at least a click on a player that exists. `config sound
+  -- on` is a real typed command, unlike every other affordance here.
   if a.sound == false then
     co:decho(string.format("<%s>Sound is off. Turn it on with ", C.dim))
     mdwui.link(co, string.format("<%s>config sound on", C.link), "config sound on",
@@ -295,64 +263,54 @@ function mdwui.renderMusic(rowsOnly)
     local id = track.id
     if type(id) == "string" and id ~= "" then
       local title = tostring(track.title or id)
-      local position = playlistPosition(id)
-      local isPlaying = playing ~= nil and playing.id == id
-      co:decho(string.format("<%s>%s ", C.charLabel,
-        position and string.format("%2d", position) or "  "))
-      co:dechoLink(string.format("<%s>%s", isPlaying and C.charHeader or C.link, title),
-        function() mdwui.audioSet({ track = id }) end, "Play " .. title, true)
-      if isPlaying then
-        co:decho(string.format(" <%s>(playing)", C.good))
-      end
+      local member = inPlaylist(id)
+      -- The package's own playing marker: C.good is what every other
+      -- renderer here says "this one is live" with.
+      local titleColor = (playing ~= nil and playing.id == id) and C.good or C.link
+      local box = checkbox(member)
       -- No playlist edits until Char.Audio has been seen: the write replaces
       -- the list, so building one from what we have not been told wipes it.
+      -- The box still DRAWS - the web renders it unclickable too.
       if known then
-        co:decho(" ")
-        co:dechoLink(string.format("<%s>%s", C.link, position and "[-]" or "[+]"),
-          position and function() removeFromPlaylist(id) end
+        co:dechoLink(box,
+          member and function() removeFromPlaylist(id) end
             or function() addToPlaylist(id) end,
-          position and ("Remove " .. title .. " from the playlist")
+          member and ("Remove " .. title .. " from the playlist")
             or ("Add " .. title .. " to the playlist"), true)
+      else
+        co:decho(box)
       end
+      co:decho(" ")
+      co:dechoLink(string.format("<%s>%s", titleColor, title),
+        function() mdwui.audioSet({ track = id }) end, "Play " .. title, true)
       co:decho("\n")
     end
   end
-end
 
---- Char.Audio is the answer to every write, so it is also where a drag's
--- label hands back to the server's own numbers.
-function mdwui.onCharAudio()
-  mdwui.state.musicPreview = nil
-  mdwui.renderMusic()
-end
-
----------------------------------------------------------------------------
--- WIDGET MENU (registered from mdwui.setupWidgetMenus, beside Combat's)
----------------------------------------------------------------------------
-
---- Re-evaluated on every render of the menu, so the checkboxes read the
--- latest Char.Audio rather than the state at the moment it opened.
-function mdwui.musicMenuItems()
-  local a = audio()
-  local function flag(key, label)
+  co:decho("\n")
+  -- Repeat and Shuffle, the web's two boxes under the list. Same gate as the
+  -- track boxes: before the first push there is no current value to flip.
+  local first = true
+  for _, def in ipairs({ { "repeat", "Repeat" }, { "shuffle", "Shuffle" } }) do
+    local key, label = def[1], def[2]
     local on = a[key] and true or false
-    return { label = label, checked = on, keepOpen = true,
-      onClick = function() mdwui.audioSet({ [key] = not on }) end }
+    if not first then co:decho("   ") end
+    first = false
+    local text = checkbox(on) .. " " .. label
+    if known then
+      co:dechoLink(text, function() mdwui.audioSet({ [key] = not on }) end,
+        string.format("Turn %s %s", label:lower(), on and "off" or "on"), true)
+    else
+      co:decho(text)
+    end
   end
-  local function mode(value, label)
-    return { label = label, checked = a.mode == value, keepOpen = true,
-      onClick = function() mdwui.audioSet({ mode = value }) end }
-  end
-  return {
-    flag("repeat", "Repeat"),
-    flag("shuffle", "Shuffle"),
-    { separator = true },
-    mode("server", "Server picks the music"),
-    mode("playlist", "Playlist"),
-    { separator = true },
-    { label = "Next", onClick = function() mdwui.audioSet({ next = true }) end },
-    { label = "Stop", onClick = function() mdwui.audioSet({ track = "" }) end },
-  }
+  co:decho("\n")
+end
+
+--- Char.Audio is the answer to every write, so every control here waits for
+-- it rather than painting itself: a box ticks because the server said so.
+function mdwui.onCharAudio()
+  mdwui.renderMusic()
 end
 
 ---------------------------------------------------------------------------

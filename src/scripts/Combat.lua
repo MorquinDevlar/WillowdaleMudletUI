@@ -139,10 +139,8 @@ function mdwui.renderCombat()
       mdwui.hpFillColor(hp, hpMax), mdwui.trackCss(g.hpTrack))
   end
   if s.ae then
-    local ae, aeMax, aeFill, aeTrack = mdwui.aeGauge(vitals)
-    gaugeRow("ae", aeFill, aeMax,
-      string.format("AE %s/%s", mdwui.fmtNum(ae), mdwui.fmtNum(aeMax)),
-      g.aeFill, aeTrack)
+    local value, max, text, track = mdwui.aeGauge(vitals)
+    gaugeRow("ae", value, max, text, g.aeFill, track)
   end
   if s.balance then
     local value, max, text, fill = balanceGauge()
@@ -226,13 +224,14 @@ local function combatMenuItems()
   }
 end
 
+-- Declared here rather than at widget creation because a widget menu dies
+-- with its widget, so it has to be re-declared on every build. The Music
+-- widget carries no menu: it is laid out like the web client's panel, which
+-- has no button (Repeat and Shuffle are boxes in the panel itself; next, stop
+-- and the mode are `ui music` verbs).
 function mdwui.setupWidgetMenus()
   if not (mdw and mdw.setWidgetMenu) then return end
   mdw.setWidgetMenu("Combat", combatMenuItems, "Combat")
-  -- The Music menu's items live with its renderer (Music.lua); both menus are
-  -- declared here because a widget menu dies with its widget, so they have to
-  -- be re-declared on every build.
-  mdw.setWidgetMenu("Music", mdwui.musicMenuItems, "Music")
 end
 
 ---------------------------------------------------------------------------
@@ -297,11 +296,13 @@ function mdwui.setupPromptGauges()
   if s.balance then add("balance", g.balFill, g.balTrack) end
   if s.enemy then add("enemy", g.enemyFill, g.enemyTrack) end
   mdw.setPromptGauges(defs)
-  -- Fresh gauges carry their default fills and the plain AE track - forget
-  -- the remembered bands and the remembered reserve.
-  mdwui.state.hpFillCss = nil
-  mdwui.state.balFillCss = nil
-  mdwui.state.aeTrackCss = nil
+  -- Fresh gauges carry the styles just declared, so the memos start AS the
+  -- declaration: the update below then restyles only what has already moved
+  -- away from it (a low band, a held reserve) instead of re-applying the
+  -- declaration on every build and every menu toggle.
+  mdwui.state.hpFillCss = g.hpFill
+  mdwui.state.balFillCss = g.balFill
+  mdwui.state.aeTrackCss = mdwui.trackCss(g.aeTrack)
   mdwui.updatePromptGauges()
 end
 
@@ -323,12 +324,10 @@ function mdwui.updatePromptGauges()
     mdw.setPromptGaugeStyle("hp", mdwui.fillCss(fill))
   end
 
-  local ae, aeMax, aeFill, aeTrack = mdwui.aeGauge(vitals)
-  mdw.setPromptGaugeValue("ae", aeFill, aeMax,
-    string.format("AE %s/%s", mdwui.fmtNum(ae), mdwui.fmtNum(aeMax)))
+  local aeValue, aeMax, aeText, aeTrack = mdwui.aeGauge(vitals)
+  mdw.setPromptGaugeValue("ae", aeValue, aeMax, aeText)
   -- Restyle only when the bound slice moves, for the same reason as HP's
   -- bands: Vitals arrives up to 10/sec and the track is otherwise constant.
-  -- The front is passed as nil so MDW keeps the fill it already has.
   if aeTrack ~= mdwui.state.aeTrackCss then
     mdwui.state.aeTrackCss = aeTrack
     mdw.setPromptGaugeStyle("ae", nil, aeTrack)
