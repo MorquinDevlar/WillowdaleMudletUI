@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.4.0 - 2026-09-04
+
 ### Added
 - A Connection Stats panel: transport, whether compression is running and
   which kind, the bytes the server sent, the bytes that reached the socket,
