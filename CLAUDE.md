@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.7.0) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.8.0) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
@@ -71,6 +71,14 @@ installed even when the build was refused under an old MDW.
   widget CLOSED on a first run (`created["Connection"]`, the same test
   `defaultGroup` uses), which is what the gear-menu row exists to undo; a
   saved layout owns its visibility from then on.
+- That same first run FLOATS it top-right (`mdw.floatWidget` with an anchor,
+  MDW 0.8) instead of docking it, at a size its content fits. It happens after
+  `mdw.createBar`, not with the other first-run defaults: the anchor is
+  measured from the main console area and `WillowdaleTop` is part of what
+  defines that, so placing it earlier puts the panel a bar's height too high,
+  underneath the bar. It stays a DEFAULT rather than a rule because MDW
+  persists a float's x/y and `mdw.showWidget` reveals a hidden float without
+  moving it - so the gear row reopens it wherever the player last left it.
 
 ## The typeface
 

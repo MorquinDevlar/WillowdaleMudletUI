@@ -1095,6 +1095,24 @@ end
 check(conn ~= nil and conn.title == "Connection Stats", "the widget exists, titled as the web panel")
 check(mdw.isWidgetShown(conn) == false, "closed on a first run - the one widget that is")
 check(conn.stackId ~= "MDWUI_Comms", "and left out of the default right-dock group")
+-- Floated into the top-right corner of the MAIN CONSOLE AREA on its first run,
+-- not docked: a readout you glance at and close again, so it earns no slice of
+-- a sidebar. Placed after the top chrome bar exists, because the bar is part
+-- of what defines that corner - measured here against the same bar.
+do
+  local group = mdw.widgets[conn.stackId]
+  local margin = mdw.config.floatMargin
+  local winW = (getMainWindowSize())
+  check(group.docked == nil and group.originalDock == nil, "floating, not docked")
+  check(group.container:get_x() + group.container:get_width()
+    == winW - mdw.config.rightDockWidth - margin,
+    "a margin in from the right sidebar's edge")
+  check(group.container:get_y()
+    == mdw.config.headerHeight + mdw.barsHeight("top") + margin,
+    "and a margin below the header and our own top bar")
+  check(mdw.barsHeight("top") > 0,
+    "which is only a real test because that bar exists by then")
+end
 check(joined(conn):find("Waiting for the server", 1, true) ~= nil,
   "an empty state until the first answer, since nothing pushes this node")
 
@@ -1118,6 +1136,14 @@ check(gearRow.checked() == false, "its checkbox reads the panel's live visibilit
 local beforeOpen = connRequests()
 gearRow.onClick()
 check(mdw.isWidgetShown(conn) and gearRow.checked() == true, "clicking it reveals the panel")
+-- ...where it was left, not re-centred. This is what makes the corner a
+-- first-run DEFAULT rather than a rule the package re-imposes: mdw.showWidget
+-- shows a hidden float without moving it, so a player who drags this panel
+-- somewhere keeps it there across every close and reopen.
+check(mdw.widgets[conn.stackId].container:get_x()
+  == (getMainWindowSize()) - mdw.config.rightDockWidth - mdw.config.floatMargin
+    - mdw.widgets[conn.stackId].container:get_width(),
+  "reopening leaves it where it was rather than re-centring it")
 check(connRequests() == beforeOpen + 1,
   "and asks at once - a pull-only node has nothing cached to paint")
 

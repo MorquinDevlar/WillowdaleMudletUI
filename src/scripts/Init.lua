@@ -363,12 +363,6 @@ function mdwui.buildUI()
   })
   mdwui.state.widgets["Comm"] = true
 
-  -- Closed on a first run only, by the same test defaultGroup uses: once the
-  -- player has a saved layout, where this panel sits and whether it is open
-  -- belong to them. hideWidget on a lone group hides the group, and
-  -- mdw.showWidget puts it back at the end of the dock it came from.
-  if created["Connection"] and mdw.hideWidget then mdw.hideWidget("Connection") end
-
   -- Default grouping (first run only - see defaultGroup). Order builds the
   -- left dock top-to-bottom; the last group in each dock auto-fills.
   --
@@ -437,6 +431,39 @@ function mdwui.buildUI()
   -- mid-session installs - the real value comes from sysConnectionEvent.
   mdwui.state.loginAt = mdwui.state.loginAt or os.time()
   mdw.createBar({ name = "WillowdaleTop", edge = "top", console = true })
+
+  -- The Connection panel's first run: float it in the top-right corner at a
+  -- size its content fits, then close it. All of it is first-run only (the
+  -- same `created` test defaultGroup uses) - once the player has a saved
+  -- layout, where this panel sits and whether it is open are theirs. That
+  -- holds because MDW persists a float's x/y and mdw.showWidget brings a
+  -- hidden float back where it was instead of re-centring it, so the gear row
+  -- reopens it wherever they left it.
+  --
+  -- Floating rather than docked because it is a readout a player glances at
+  -- and closes again, not a panel that earns a permanent slice of a sidebar.
+  --
+  -- AFTER createBar, not with the other first-run defaults above: the anchor
+  -- is measured from the main console area, and the top chrome bar is part of
+  -- what defines it. Placed a moment earlier, the panel would sit a bar's
+  -- height too high and end up under it.
+  --
+  -- Placed, sized, then placed again - the anchor is computed from the box's
+  -- current size, so the resize has to happen between the two.
+  if created["Connection"] then
+    local anchored = { anchor = "topright" }
+    mdw.floatWidget("Connection", anchored)
+    local group = mdw.widgets[mdw.widgets["Connection"].stackId]
+    if group then
+      -- Twelve content lines - the eight figures, a blank, and a footnote
+      -- that wraps to three at this width - plus the Session bandwidth strip,
+      -- which is a row above the console rather than a line in it.
+      mdw.resizeWidgetClass(group, 300,
+        heightForRows(12) + (mdw.config.rowTextHeight or 0))
+    end
+    mdw.floatWidget("Connection", anchored)
+    mdw.hideWidget("Connection")
+  end
 
   -- Paint from cached data, then ask the server for everything fresh. The
   -- full payload includes Comm.History (guide 8.22); Client.Map wakes the

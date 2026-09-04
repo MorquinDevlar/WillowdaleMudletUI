@@ -34,7 +34,8 @@ Left dock                      Center            Right dock
   `ui music` verbs)
 - **Connection Stats** - what this session costs on the wire: transport,
   compression, the bytes sent against the bytes that reached the socket, and
-  the share saved. Closed by default; the gear menu at the top left opens it
+  the share saved. Closed by default; the gear menu at the top left opens it,
+  floating in the top-right corner until you put it somewhere else
 - **Prompt bar** - your real in-game prompt, delivered over GMCP as ANSI
 - **Map** - Mudlet's native mapper, fed by the server's Client.Map protocol
 - **Numpad walking** - the same keypad shortcuts as the web client: 1-9 walk
@@ -133,11 +134,11 @@ integration contract (it only seeds tables at load time and MDW invokes it
 whenever its UI builds). Widget arrangement is yours after the first run: MDW
 persists your layout, and the default grouping never overrides it.
 
-**MDW 0.7.0 or newer is required, and this package installs it for you.**
+**MDW 0.8.0 or newer is required, and this package installs it for you.**
 Install the UI on its own and it fetches the MDW release it was built against,
 then builds the interface once MDW lands - Mudlet resolves no package
 dependencies itself. If that download cannot be made (no network, GitHub
-blocked) it declines to build and prints a single `needs MDW 0.7.0 or newer`
+blocked) it declines to build and prints a single `needs MDW 0.8.0 or newer`
 line on the main console with the URL, rather than half a UI. MDW is never
 downgraded: a newer one than the minimum is left alone.
 

@@ -51,7 +51,12 @@ mdwui.version = "0.4.0"
 -- finds it by - which makes the API load-bearing for that widget rather than
 -- decorative, and the gate the right place to require it instead of a guard
 -- at the one call site.
-mdwui.minMdwVersion = "0.7.0"
+--
+-- 0.8.0 likewise: mdw.floatWidget's anchor. The same panel opens in the
+-- top-right corner of the main window rather than in a sidebar, and before
+-- 0.8.0 a float could only be centred - so under an older MDW the widget
+-- would come up in the middle of the game text on its first run.
+mdwui.minMdwVersion = "0.8.0"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
