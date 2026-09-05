@@ -22,6 +22,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.5.0 - 2026-09-05
+
 ### Added
 - The Connection Stats panel opens floating in the top-right corner of the
   main window instead of taking a slice of a sidebar - clear of the scroll bar,
