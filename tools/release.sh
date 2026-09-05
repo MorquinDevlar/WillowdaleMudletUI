@@ -104,6 +104,37 @@ if ! awk '/^## Unreleased[[:space:]]*$/ { inside = 1; next }
     die "the '## Unreleased' section is empty; write the release notes under '## Unreleased' first"
 fi
 
+# Already-released sections must still read exactly as they were published.
+# Editing one is silent and costly: the feed is REGENERATED from this file on
+# every release, so a change to an old section rewrites notes players were
+# already shown - and the usual way it happens is an entry written into the
+# newest released section instead of Unreleased, by anyone anchoring on the
+# text that was there last time. That also empties Unreleased, but the check
+# above only catches it when NOTHING else was added.
+step "Checking the released sections against their tags"
+for released_tag in $(git tag --list 'v*' --sort=-v:refname | head -20); do
+    released_version="${released_tag#v}"
+    git rev-parse -q --verify "$released_tag^{commit}" >/dev/null 2>&1 || continue
+    git show "$released_tag:CHANGELOG.md" >"$tmpdir/tagged.md" 2>/dev/null || continue
+    section() {
+        awk -v want="## $released_version " '
+            index($0, want) == 1 { inside = 1; print; next }
+            inside && /^## / { exit }
+            inside' "$1"
+    }
+    section "$tmpdir/tagged.md" >"$tmpdir/was.md"
+    section CHANGELOG.md >"$tmpdir/now.md"
+    # A tag whose own copy has no such section predates the discipline; skip it.
+    [ -s "$tmpdir/was.md" ] || continue
+    if ! cmp -s "$tmpdir/was.md" "$tmpdir/now.md"; then
+        printf '%s\n' "--- as published in $released_tag" "+++ in CHANGELOG.md now" >&2
+        diff "$tmpdir/was.md" "$tmpdir/now.md" >&2 || true
+        die "the '## $released_version' section has changed since it was published.\
+ Release notes are generated from this file, so an edit there rewrites what players were already shown.\
+ Move new entries under '## Unreleased' and restore that section."
+    fi
+done
+
 # The smoke suite asserts that mfile and mdwui.version agree (as it asserts
 # mdwui.packageName matches the mfile "package"), so both must be bumped
 # before the gate runs, not after it.

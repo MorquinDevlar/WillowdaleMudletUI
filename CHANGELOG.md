@@ -15,6 +15,14 @@ Installed clients read this file too: the package fetches the raw copy from
 `main` and shows the matching `## X.Y.Z` section when it finds a newer
 release. Everything written here is text a player will eventually be shown.
 
+**A dated `## X.Y.Z` section is published history: never edit one.** The
+update feed is REGENERATED from this whole file on every release, so changing
+an old section rewrites notes players have already been shown. New entries go
+under `## Unreleased` and nowhere else - anchor on that heading itself, not on
+whatever bullet happens to sit below it, because the last release promoted
+those bullets into the section above. `tools/release.sh` refuses to release
+when a released section no longer matches the copy at its tag.
+
 The release tag format `vX.Y.Z` and the asset name
 `WillowdaleMudletUI.mpackage` are a contract - the in-package updater builds
 `https://github.com/MorquinDevlar/WillowdaleMudletUI/releases/download/vX.Y.Z/WillowdaleMudletUI.mpackage`
@@ -76,7 +84,6 @@ out of the version number alone - so neither may change.
 - Clicking something in a widget no longer echoes the command it stands for
   into your main window. The game still answers as it always did.
 
-## 0.3.0 - 2026-08-30
 ## 0.3.0 - 2026-08-30
 
 ### Added
