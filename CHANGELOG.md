@@ -22,6 +22,26 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Added
+- The Connection Stats panel opens floating in the top-right corner of the
+  main window instead of taking a slice of a sidebar - clear of the scroll bar,
+  and of the right sidebar when you have one. Move or resize it and it stays
+  where you put it, every time you close and reopen it.
+
+### Changed
+- Dragging a floating panel snaps it flush against the edges of the main
+  window and against your other floating panels, so they line up without
+  nudging, and it keeps clear of the scroll bar.
+
+### Fixed
+- Removing or reinstalling the UI no longer leaves Mudlet warning that the
+  "Fira Code Willowdale" font is not installed. The font ships with this
+  package, so Mudlet unloads it as the package goes - the main window is now
+  handed back to your own font first, and gets ours again when the new copy
+  builds.
+- Reinstalling the UI no longer moves the Connection Stats panel, and no
+  longer reopens one you had closed.
+
 ## 0.4.0 - 2026-09-04
 
 ### Added
@@ -32,10 +52,6 @@ out of the version number alone - so neither may change.
   while it is closed. Refresh at the top of the panel asks on demand.
 - The panel starts closed. The gear menu at the top left opens it, and that
   menu now carries this UI's own entries above Rebuild UI and Uninstall.
-- It opens floating in the top-right corner of the main window rather than
-  taking a slice of a sidebar - clear of your scroll bar and of the right
-  sidebar when you have one, against the window edge when you do not. Move or
-  resize it and it stays where you put it, every time you close and reopen it.
 - `ui connection` prints the same figures in the main window. `ui show conn`
   opens the panel; `ui refresh connection` pulls fresh numbers without it.
 - The AE gauge shows the part of your aether that is bound. A Weaver's Spirit
@@ -54,24 +70,11 @@ out of the version number alone - so neither may change.
   `ui music stop`, and `ui music volume combat 40` for any of the four sound
   levels.
 
-### Fixed
-- Removing or reinstalling the UI no longer leaves Mudlet warning that the
-  "Fira Code Willowdale" font is not installed. The font ships with this
-  package, so Mudlet unloads it as the package goes - the main window is now
-  handed back to your own font first, and gets ours again when the new copy
-  builds.
-- Reinstalling the UI no longer moves the Connection Stats panel. Wherever you
-  put it, and whether you left it open or closed, is yours from the first run
-  onwards.
-
 ### Changed
-- Dragging a floating panel now snaps it flush against the edges of the main
-  window and against your other floating panels, so they line up without
-  nudging. It keeps clear of the scroll bar. This comes with the framework
-  update this release requires.
 - Clicking something in a widget no longer echoes the command it stands for
   into your main window. The game still answers as it always did.
 
+## 0.3.0 - 2026-08-30
 ## 0.3.0 - 2026-08-30
 
 ### Added
