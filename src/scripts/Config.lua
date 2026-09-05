@@ -61,8 +61,11 @@ mdwui.version = "0.4.0"
 -- same reason: right-hand anchors there keep the MAIN CONSOLE's scrollbar
 -- clear, which Mudlet draws inside the console's own right edge. Under 0.8.0
 -- the panel lands underneath it - the exact default this package sets on a
--- first run, so the fix has to be required rather than hoped for.
-mdwui.minMdwVersion = "0.8.1"
+-- first run, so the fix has to be required rather than hoped for. 0.8.2 is the
+-- other half of the same placement: there the float area is measured the way
+-- MDW reserves its borders, dock gap included, so the panel shows the same
+-- margin above it as beside it instead of half of one.
+mdwui.minMdwVersion = "0.8.2"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
