@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.8.0) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.8.1) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
@@ -79,6 +79,8 @@ installed even when the build was refused under an old MDW.
   underneath the bar. It stays a DEFAULT rather than a rule because MDW
   persists a float's x/y and `mdw.showWidget` reveals a hidden float without
   moving it - so the gear row reopens it wherever the player last left it.
+  The corner is MDW's to compute, scrollbar included (`mainScrollBarWidth`,
+  0.8.1) - this package passes an anchor, never pixels.
 
 ## The typeface
 

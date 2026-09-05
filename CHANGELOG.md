@@ -33,9 +33,9 @@ out of the version number alone - so neither may change.
 - The panel starts closed. The gear menu at the top left opens it, and that
   menu now carries this UI's own entries above Rebuild UI and Uninstall.
 - It opens floating in the top-right corner of the main window rather than
-  taking a slice of a sidebar - clear of the right sidebar when you have one,
-  against the window edge when you do not. Move or resize it and it stays
-  where you put it, every time you close and reopen it.
+  taking a slice of a sidebar - clear of your scroll bar and of the right
+  sidebar when you have one, against the window edge when you do not. Move or
+  resize it and it stays where you put it, every time you close and reopen it.
 - `ui connection` prints the same figures in the main window. `ui show conn`
   opens the panel; `ui refresh connection` pulls fresh numbers without it.
 - The AE gauge shows the part of your aether that is bound. A Weaver's Spirit

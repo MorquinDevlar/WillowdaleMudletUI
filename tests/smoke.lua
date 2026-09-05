@@ -1104,9 +1104,11 @@ do
   local margin = mdw.config.floatMargin
   local winW = (getMainWindowSize())
   check(group.docked == nil and group.originalDock == nil, "floating, not docked")
+  -- Past the main console's scrollbar as well as the margin: MDW draws that
+  -- allowance for every right-hand anchor, and this panel is the reason.
   check(group.container:get_x() + group.container:get_width()
-    == winW - mdw.config.rightDockWidth - margin,
-    "a margin in from the right sidebar's edge")
+    == winW - mdw.config.rightDockWidth - mdw.config.mainScrollBarWidth - margin,
+    "a margin in from the right sidebar's edge, clear of the console scrollbar")
   check(group.container:get_y()
     == mdw.config.headerHeight + mdw.barsHeight("top") + margin,
     "and a margin below the header and our own top bar")
@@ -1141,7 +1143,8 @@ check(mdw.isWidgetShown(conn) and gearRow.checked() == true, "clicking it reveal
 -- shows a hidden float without moving it, so a player who drags this panel
 -- somewhere keeps it there across every close and reopen.
 check(mdw.widgets[conn.stackId].container:get_x()
-  == (getMainWindowSize()) - mdw.config.rightDockWidth - mdw.config.floatMargin
+  == (getMainWindowSize()) - mdw.config.rightDockWidth
+    - mdw.config.mainScrollBarWidth - mdw.config.floatMargin
     - mdw.widgets[conn.stackId].container:get_width(),
   "reopening leaves it where it was rather than re-centring it")
 check(connRequests() == beforeOpen + 1,

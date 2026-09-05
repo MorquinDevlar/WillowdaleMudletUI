@@ -56,7 +56,13 @@ mdwui.version = "0.4.0"
 -- top-right corner of the main window rather than in a sidebar, and before
 -- 0.8.0 a float could only be centred - so under an older MDW the widget
 -- would come up in the middle of the game text on its first run.
-mdwui.minMdwVersion = "0.8.0"
+--
+-- 0.8.1 is not an API adoption but a placement one, and it is pinned for the
+-- same reason: right-hand anchors there keep the MAIN CONSOLE's scrollbar
+-- clear, which Mudlet draws inside the console's own right edge. Under 0.8.0
+-- the panel lands underneath it - the exact default this package sets on a
+-- first run, so the fix has to be required rather than hoped for.
+mdwui.minMdwVersion = "0.8.1"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
