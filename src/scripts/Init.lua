@@ -450,7 +450,15 @@ function mdwui.buildUI()
   --
   -- Placed, sized, then placed again - the anchor is computed from the box's
   -- current size, so the resize has to happen between the two.
-  if created["Connection"] then
+  -- The `created` test alone is NOT enough here, for the reason defaultGroup
+  -- spells out: an uninstall/reinstall destroys and recreates this widget, so
+  -- `created` is true again while the saved layout still owns where it sits.
+  -- Placing it then tears it out of the group the restore is about to rebuild
+  -- it into (floatWidget re-homes it), and the panel comes back adrift.
+  -- _pendingStackId is the restore's own marker, still set at this point -
+  -- rebuildStacksFromLayout consumes it at the END of the setup.
+  local connection = mdw.widgets["Connection"]
+  if created["Connection"] and connection and not connection._pendingStackId then
     local anchored = { anchor = "topright" }
     mdw.floatWidget("Connection", anchored)
     local group = mdw.widgets[mdw.widgets["Connection"].stackId]

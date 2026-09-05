@@ -54,7 +54,21 @@ out of the version number alone - so neither may change.
   `ui music stop`, and `ui music volume combat 40` for any of the four sound
   levels.
 
+### Fixed
+- Removing or reinstalling the UI no longer leaves Mudlet warning that the
+  "Fira Code Willowdale" font is not installed. The font ships with this
+  package, so Mudlet unloads it as the package goes - the main window is now
+  handed back to your own font first, and gets ours again when the new copy
+  builds.
+- Reinstalling the UI no longer moves the Connection Stats panel. Wherever you
+  put it, and whether you left it open or closed, is yours from the first run
+  onwards.
+
 ### Changed
+- Dragging a floating panel now snaps it flush against the edges of the main
+  window and against your other floating panels, so they line up without
+  nudging. It keeps clear of the scroll bar. This comes with the framework
+  update this release requires.
 - Clicking something in a widget no longer echoes the command it stands for
   into your main window. The game still answers as it always did.
 

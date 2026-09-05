@@ -485,6 +485,22 @@ function mdwui.onUninstall(_, package)
   -- update differ at all.
   local held = mdw and mdw.deferLayoutSaves and mdw.resumeLayoutSaves
   if held then mdw.deferLayoutSaves() end
+
+  -- HAND THE MAIN CONSOLE BACK ITS OWN FONT, before anything else here.
+  -- THIS PACKAGE ships the family the whole UI draws in, and Mudlet unloads a
+  -- package's fonts as part of uninstalling it - then checks whether the
+  -- profile's display font still exists, moves it to the bundled default and
+  -- warns the player if it does not (Host::substituteMissingDisplayFont, run
+  -- from uninstallPackage). That check happens after this handler returns, so
+  -- the family has to be off the console by then; re-resolving instead would
+  -- see nothing wrong, because Mudlet raises this event BEFORE it unloads the
+  -- fonts. An UPDATE takes the same path and gets the family straight back
+  -- from mdwui.assertFont on the rebuild, so the cost is one repaint.
+  --
+  -- Inside the layout-save hold, not before it: a font change runs the
+  -- profile's sysSettingChanged handlers, and anything they provoke belongs
+  -- under the same lock as the rest of this teardown.
+  if mdw and mdw.restoreMainFont then mdw.restoreMainFont() end
   mdwui.killAllTimers()
   mdwui.killAllHandlers()
   -- An open context menu holds closures into this package - close it with us.

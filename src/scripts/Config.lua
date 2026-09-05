@@ -65,7 +65,13 @@ mdwui.version = "0.4.0"
 -- other half of the same placement: there the float area is measured the way
 -- MDW reserves its borders, dock gap included, so the panel shows the same
 -- margin above it as beside it instead of half of one.
-mdwui.minMdwVersion = "0.8.2"
+--
+-- 0.9.0 is mdw.restoreMainFont, and it is a HARD requirement rather than a
+-- guarded nicety: this package ships the family the whole UI draws in, and
+-- Mudlet unloads a package's fonts while uninstalling it, then tells the
+-- player their font is missing. Only that call, made from our own uninstall
+-- handler, gets the console off the family before Mudlet looks.
+mdwui.minMdwVersion = "0.9.0"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter

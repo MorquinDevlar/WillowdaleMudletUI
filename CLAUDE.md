@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.8.2) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.9.0) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
@@ -80,7 +80,12 @@ installed even when the build was refused under an old MDW.
   persists a float's x/y and `mdw.showWidget` reveals a hidden float without
   moving it - so the gear row reopens it wherever the player last left it.
   The corner is MDW's to compute, scrollbar included (`mainScrollBarWidth`,
-  0.8.1) - this package passes an anchor, never pixels.
+  0.8.1) - this package passes an anchor, never pixels. The placement carries
+  `defaultGroup`'s OTHER guard as well as `created`: a reinstall recreates the
+  widget, so `created` is true again while the restore still owns it, and
+  floating it then tears it out of the group `rebuildStacksFromLayout` is about
+  to rebuild. `_pendingStackId` is that marker, and it is still set at buildUI
+  time.
 
 ## The typeface
 
@@ -122,6 +127,17 @@ affects ticker never outlives its widget. Numpad walking is the package's own
 native key folder (`src/keys`), which Mudlet installs and removes with the
 package; this package binds no temp keys at all, so there is nothing
 key-related to collect at teardown or uninstall.
+
+`mdwui.onUninstall` also hands the MAIN CONSOLE back its own font
+(`mdw.restoreMainFont`), first thing inside the layout-save hold. This package
+SHIPS the family the whole UI draws in, and Mudlet unloads a package's fonts
+as it uninstalls it, then checks whether the profile's display font still
+exists - warning the player and moving them to the bundled default if not
+(`Host::substituteMissingDisplayFont`, run from `uninstallPackage`). That
+check happens after our handler returns, so the family has to be off the
+console by then; re-resolving instead sees nothing wrong, because Mudlet
+raises the event BEFORE unloading the fonts. An update pays one repaint -
+`mdwui.assertFont` re-applies it on the rebuild.
 
 ## Update vs remove (what a player keeps)
 

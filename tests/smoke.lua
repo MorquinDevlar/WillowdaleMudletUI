@@ -3025,6 +3025,11 @@ mdw.addToStack("MDWUI_Status", "Quests")   -- dragged out of the right dock
 mdw.setWidgetFontSize("Combat", (mdw.getFontSizes().widgets["Combat"] or 11) + 3)
 mdw.widgets["Forage"]:hide()               -- closed a widget they never use
 mdw.setDockWidth("left", 333)
+-- ...and opened the Connection panel and dragged it somewhere of their own.
+-- It is the one widget this package places itself on a first run, so it is the
+-- one that can have that default stamped back over a saved position.
+mdw.showWidget("Connection")
+mdw.widgets[mdw.widgets["Connection"].stackId].container:move(400, 300)
 mdw.saveLayout()
 local wantMembers = table.concat(mdw.widgets["MDWUI_Status"].members, ",")
 local wantFont = mdw.widgets["Combat"].fontAdjust
@@ -3056,6 +3061,19 @@ check(table.concat(mdw.widgets["MDWUI_Status"].members, ","):find("Quests", 1, t
 check(mdw.widgets["Combat"].fontAdjust == wantFont, "with their per-widget font size")
 check(mdw.widgets["Forage"].visible == false, "and the widget they closed still closed")
 check(mdw.config.leftDockWidth == 333, "and the sidebar width they set")
+-- The fourth guard of the same kind as section 12f's three: `created` is true
+-- again after a reinstall (the widget really is new), so the first-run float
+-- has to defer to the restore's own marker or it re-anchors the panel - and
+-- re-hides it - over wherever the player left it.
+-- No locals of its own: Lua 5.1 allows 200 per chunk and this one is at the
+-- ceiling. 400,300 is where the player dragged it above.
+do
+  check(mdw.widgets[mdw.widgets["Connection"].stackId].container:get_x() == 400
+    and mdw.widgets[mdw.widgets["Connection"].stackId].container:get_y() == 300,
+    "the Connection panel comes back where the player dragged it")
+  check(mdw.isWidgetShown(mdw.widgets["Connection"]),
+    "and still open, not re-hidden by the first-run default")
+end
 
 -- 13. Uninstalling this package removes everything ours, leaves MDW running.
 -- The event carries the mfile package name - packageName must match it.
@@ -3065,7 +3083,19 @@ check(mdw.config.leftDockWidth == 333, "and the sidebar width they set")
 -- package manager. Its invariant is that MDW keeps running; the game's remove
 -- command is a different thing and is covered separately above.
 mdw.showContextMenu("stale actions", { { label = "Noop", onClick = function() end } }, 100, 100)
+-- The console is in OUR font going in, which is the whole point of the check
+-- below: this package ships that family.
+check(H.mainFont == "Fira Code Willowdale", "the console is in our font before the uninstall")
 raiseEvent("sysUninstallPackage", mdwui.packageName)
+-- Mudlet unloads a package's fonts when it uninstalls it, then checks whether
+-- the profile's display font still exists and warns the player if it does not.
+-- That check runs after this handler, so the family has to be off the console
+-- by now - the fonts are still loaded at this moment, so nothing that
+-- re-resolves would notice.
+check(H.mainFont ~= "Fira Code Willowdale",
+  "our uninstall hands the main console back off the font we ship")
+check(H.mainFont == "Bitstream Vera Sans Mono",
+  "to the family MDW captured before it ever applied ours")
 check(mdw.menus.context == false and H.labels["MDW_ContextMenuBg"] == nil,
   "open context menu closed by our uninstall")
 check(mdw.widgets["Combat"] == nil and mdw.widgets["Comm"] == nil, "our widgets destroyed on uninstall")
