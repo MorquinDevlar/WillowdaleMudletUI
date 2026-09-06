@@ -430,7 +430,13 @@ function mdwui.buildUI()
   -- starts the connection timer, and is seeded here as a fallback for
   -- mid-session installs - the real value comes from sysConnectionEvent.
   mdwui.state.loginAt = mdwui.state.loginAt or os.time()
-  mdw.createBar({ name = "WillowdaleTop", edge = "top", console = true })
+  -- reflow (MDW 0.9.1) is what makes the strip follow a drag live, the way
+  -- panel content does: MDW resizes the bar console and then calls this back,
+  -- so the right-aligned version group re-pads at the new wrap width on every
+  -- mouse move rather than a tick later. It also paints the bar here, before
+  -- any GMCP has to arrive.
+  mdw.createBar({ name = "WillowdaleTop", edge = "top", console = true,
+    reflow = mdwui.renderTopBar })
 
   -- The Connection panel's first run: float it in the top-right corner at a
   -- size its content fits, then close it. All of it is first-run only (the
@@ -459,7 +465,13 @@ function mdwui.buildUI()
   -- rebuildStacksFromLayout consumes it at the END of the setup.
   local connection = mdw.widgets["Connection"]
   if created["Connection"] and connection and not connection._pendingStackId then
-    local anchored = { anchor = "topright" }
+    -- The margin is MDW's SNAP inset rather than its anchor default: at that
+    -- distance the panel lands exactly ON the two edges a dragged float snaps
+    -- to, so MDW reads it as attached to them and carries it along when a
+    -- sidebar is dragged wider or the window resized, instead of leaving it
+    -- stranded over the sidebar. nil on an MDW without the key, which is the
+    -- floatMargin placement this had before.
+    local anchored = { anchor = "topright", margin = mdw.config.floatSnapInset }
     mdw.floatWidget("Connection", anchored)
     local group = mdw.widgets[mdw.widgets["Connection"].stackId]
     if group then
@@ -482,10 +494,9 @@ function mdwui.buildUI()
 
   -- Affects countdowns are driven locally (no per-second push from the
   -- server), so a 1s ticker repaints the panel while durations run down. The
-  -- top bar rides along: its connection clock ticks on the same beat, and
-  -- this repaint is also what re-pads the right-aligned version group after
-  -- a window or sidebar resize - mdw.layoutBars resizes the bar console with
-  -- no callback to hook, so the bar simply catches up within a second.
+  -- top bar rides along: its connection clock ticks on the same beat. Resizes
+  -- are NOT this timer's job - the bar's reflow callback repaints it as MDW
+  -- lays it out - but the clock still needs a beat of its own.
   local tid = tempTimer(1, function()
     mdwui.renderAffects()
     mdwui.renderTopBar()

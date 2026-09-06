@@ -395,9 +395,15 @@ topPlain = topBarPlain()
 check(#topPlain == mdw.calculateWrap(700, mdw.config.contentFontSize) - 1
   and topPlain:sub(-#"Mapper v9.9.9") == "Mapper v9.9.9",
   "top bar re-pads to a narrower console")
+-- And the re-pad is MDW's to trigger, not the ticker's: the bar carries our
+-- renderer as its reflow (MDW 0.9.1), so a layout pass repaints it at the new
+-- width in the same beat the console is resized. Without the binding this
+-- restore would leave the 700px padding standing until the next tick.
+check(topBar.reflow == mdwui.renderTopBar, "the top bar carries our renderer as its reflow")
 mdw.layoutBars() -- restore the real width for everything downstream
--- The 1s ticker carries the clock (and the re-pad after a resize, which MDW
--- performs with no callback to hook). Fire the registered timers in place
+check(#topBarPlain() == topBarWidth(),
+  "a layout pass repaints the bar itself, at the width it just gave it")
+-- The 1s ticker carries the clock. Fire the registered timers in place
 -- rather than through H.flushTimers: the teardown checks further down need
 -- these ids still alive.
 local topClears = topBar.console._clears or 0
@@ -417,6 +423,18 @@ mdw.reorganizeDock("left")
 mdw.splitterDrag.active = false
 check((mdw.widgets["Character"].content._clears or 0) > liveClears,
   "Character grid re-renders during a live sidebar drag")
+-- The top bar rides the same drag, through its reflow rather than through
+-- bindRenderer: applyDockWidth re-lays the bars on every mouse move.
+do -- scoped: the suite is one function, and Lua 5.1 caps it at 200 locals
+  local barClears = topBar.console._clears or 0
+  local dockBefore = mdw.config.leftDockWidth
+  mdw.splitterDrag.active = true
+  mdw.applyDockWidth("left", dockBefore + 30)
+  mdw.splitterDrag.active = false
+  check((topBar.console._clears or 0) > barClears and #topBarPlain() == topBarWidth(),
+    "top bar re-pads on every move of a live sidebar drag")
+  mdw.applyDockWidth("left", dockBefore)
+end
 -- Web defaults (promptBarSettings): the Vitals prompt line stays hidden -
 -- the gauges carry those numbers - while the Worth line (prompt2) shows.
 check(joined(mdw.promptBar):find("carrying 4/20", 1, true) ~= nil,
@@ -1101,7 +1119,10 @@ check(conn.stackId ~= "MDWUI_Comms", "and left out of the default right-dock gro
 -- of what defines that corner - measured here against the same bar.
 do
   local group = mdw.widgets[conn.stackId]
-  local margin = mdw.config.floatMargin
+  -- The snap inset, not the anchor default: that distance puts the panel ON
+  -- the edges a dragged float snaps to, which is what makes MDW carry it with
+  -- them. Falls back the way mdw.floatPos does on an MDW without the key.
+  local margin = mdw.config.floatSnapInset or mdw.config.floatMargin
   local winW = (getMainWindowSize())
   check(group.docked == nil and group.originalDock == nil, "floating, not docked")
   -- Past the main console's scrollbar as well as the margin: MDW draws that
@@ -1122,6 +1143,27 @@ do
     "and a margin below the header and our own top bar")
   check(mdw.barsHeight("top") > 0,
     "which is only a real test because that bar exists by then")
+  -- ...and that placement is ON both snap edges, so MDW reports the panel as
+  -- attached to them: a sidebar dragged wider takes it along instead of
+  -- leaving it stranded over the sidebar. The whole point of choosing the
+  -- snap inset as the margin.
+  if mdw.floatSnapEdges then
+    local snapLeft, snapTop, snapRight = mdw.floatSnapEdges()
+    check(group.container:get_y() == snapTop
+      and group.container:get_x() + group.container:get_width() == snapRight,
+      "which is exactly where a dragged float snaps, top edge and right")
+    check(group.anchorX == "right" and group.anchorY == "top",
+      "so MDW reads the panel as attached to both")
+    local wasWidth = mdw.config.rightDockWidth
+    mdw.setDockWidth("right", wasWidth + 40)
+    check(group.container:get_x() + group.container:get_width()
+      == select(3, mdw.floatSnapEdges()),
+      "and a wider right sidebar carries it in rather than covering it")
+    mdw.setDockWidth("right", wasWidth)
+    check(group.container:get_x() + group.container:get_width() == snapRight
+      and group.container:get_y() == snapTop, "and back out again")
+    check(snapLeft <= group.container:get_x(), "still inside the main console area")
+  end
 end
 check(joined(conn):find("Waiting for the server", 1, true) ~= nil,
   "an empty state until the first answer, since nothing pushes this node")
@@ -1152,7 +1194,8 @@ check(mdw.isWidgetShown(conn) and gearRow.checked() == true, "clicking it reveal
 -- somewhere keeps it there across every close and reopen.
 check(mdw.widgets[conn.stackId].container:get_x()
   == (getMainWindowSize()) - mdw.config.rightDockWidth - mdw.config.dockGap
-    - mdw.config.mainScrollBarWidth - mdw.config.floatMargin
+    - mdw.config.mainScrollBarWidth
+    - (mdw.config.floatSnapInset or mdw.config.floatMargin)
     - mdw.widgets[conn.stackId].container:get_width(),
   "reopening leaves it where it was rather than re-centring it")
 check(connRequests() == beforeOpen + 1,

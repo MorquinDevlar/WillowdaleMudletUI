@@ -30,6 +30,23 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Changed
+- The Connection Stats panel now opens tucked against the top and right edges
+  of the main window and STAYS on them: drag a sidebar wider, toggle one, or
+  resize the window and the panel moves with the edge instead of ending up
+  over the sidebar. Move it yourself and it goes back to staying exactly where
+  you put it. Needs MDW 0.9.2, which the UI fetches for you if you are on an
+  older one - it is what carries a panel along with an edge, and what draws
+  the lighter border telling you a panel is attached to one.
+
+### Fixed
+- Closing the Connection Stats panel with the x on its tab and opening it
+  again brings it back where it was, instead of dropping it in the middle of
+  the screen. Closing it also stays closed across a restart.
+- The top bar's name, level, connection clock and version strip now follow a
+  window or sidebar resize as you drag it, instead of staying at the old width
+  until the next second ticked over.
+
 ## 0.5.0 - 2026-09-05
 
 ### Added

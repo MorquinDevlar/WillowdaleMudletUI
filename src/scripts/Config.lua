@@ -71,7 +71,23 @@ mdwui.version = "0.5.0"
 -- Mudlet unloads a package's fonts while uninstalling it, then tells the
 -- player their font is missing. Only that call, made from our own uninstall
 -- handler, gets the console off the family before Mudlet looks.
-mdwui.minMdwVersion = "0.9.0"
+--
+-- 0.9.1 is the chrome bar's reflow callback. Required rather than guarded for
+-- the same reason as the 0.8.1 placement pin: MDW never updates itself, so a
+-- capability this package only uses when it happens to be there is one no
+-- player ever gets. Without it the top bar is repainted solely by our 1s
+-- ticker, and its right-aligned version group sits at the old width for up to
+-- a second every time a sidebar or the window is dragged.
+--
+-- 0.9.2 is float edge attachment and the mdw.config.floatSnapInset that goes
+-- with it, and it is the third pin of the same placement (0.8.1, 0.8.2): the
+-- Connection panel is anchored at that inset so it lands ON the edges a
+-- dragged float snaps to and MDW carries it along when a sidebar is dragged
+-- wider. Under an older MDW the key is nil, the anchor falls back to
+-- floatMargin, and the panel ends up sitting over the sidebar - which is the
+-- first-run default this package sets, so again a fix to require rather than
+-- hope for.
+mdwui.minMdwVersion = "0.9.2"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter

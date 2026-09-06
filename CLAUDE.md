@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.9.0) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.9.2) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
@@ -80,7 +80,13 @@ installed even when the build was refused under an old MDW.
   persists a float's x/y and `mdw.showWidget` reveals a hidden float without
   moving it - so the gear row reopens it wherever the player last left it.
   The corner is MDW's to compute, scrollbar included (`mainScrollBarWidth`,
-  0.8.1) - this package passes an anchor, never pixels. The placement carries
+  0.8.1) - this package passes an anchor, never pixels. The MARGIN it passes
+  with that anchor is `mdw.config.floatSnapInset`, not MDW's anchor default:
+  at that distance the panel lands exactly ON the two edges a dragged float
+  snaps to, so MDW reads it as ATTACHED and carries it along when a sidebar is
+  dragged wider or the window resized - the alternative is a panel sitting
+  over the sidebar. It is nil on an MDW without the key, which falls back to
+  `floatMargin` and the placement this had before. The placement carries
   `defaultGroup`'s OTHER guard as well as `created`: a reinstall recreates the
   widget, so `created` is true again while the restore still owns it, and
   floating it then tears it out of the group `rebuildStacksFromLayout` is about
@@ -258,8 +264,12 @@ enforces that `mdwui.version` matches the mfile; bump them together. The top
 bar (`WillowdaleTop`, MDW `createBar`) renders Char.Info name/class and the
 connection timer left-aligned, and the UI, MDW and mapper versions
 right-aligned - padded to the bar console's wrap width (the same
-`mdw.calculateWrap` MDW applies to it) and repainted by the 1s ticker, which
-is also how it catches up after resizes.
+`mdw.calculateWrap` MDW applies to it). Two things repaint it and they cover
+different ground: the 1s ticker carries the connection clock, and the bar's
+`reflow` (MDW 0.9.1, passed to `createBar`) carries the WIDTH - MDW calls it
+after resizing the bar console on every layout pass, live drag moves included,
+which is what re-pads the version group as the window or a sidebar is dragged
+instead of a tick later.
 
 ## Verification (all three before calling work done)
 
