@@ -30,6 +30,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.5.1 - 2026-09-06
+
 ### Changed
 - The Connection Stats panel now opens tucked against the top and right edges
   of the main window and STAYS on them: drag a sidebar wider, toggle one, or
