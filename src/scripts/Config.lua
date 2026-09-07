@@ -87,7 +87,7 @@ mdwui.version = "0.5.1"
 -- floatMargin, and the panel ends up sitting over the sidebar - which is the
 -- first-run default this package sets, so again a fix to require rather than
 -- hope for.
-mdwui.minMdwVersion = "0.9.2"
+mdwui.minMdwVersion = "0.9.3"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter

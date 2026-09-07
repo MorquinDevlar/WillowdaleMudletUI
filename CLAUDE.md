@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.9.2) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` (0.9.3) is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
