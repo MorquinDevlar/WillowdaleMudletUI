@@ -1,30 +1,29 @@
 --[[
   Music.lua
-  The Music widget: the master volume, and the catalog the player plays from
-  and builds a playlist with (guide section 5.16).
+  The Sound header menu: the master volume, mute, and the catalog the player
+  plays from and builds a playlist with (guide section 5.16).
 
-  The LAYOUT is the web client's "Sound & Music" panel: a bare volume slider,
-  the "Music" header, the hint, the catalog with a playlist checkbox per row,
-  and Repeat/Shuffle under it. Only the layout - the colours are this
-  package's own, so MDW themes keep reaching this widget like every other.
+  It is the web client's own sound menu, the one in the site nav
+  (webclient.html's `.sound-menu`): the volume slider, the Mute box, a
+  divider, the catalog, and Repeat/Shuffle under it. This package had a Music
+  WIDGET rendering the same panel and it is gone - one surface for this, not
+  two, and the menu is where the web client puts it.
 
-  Two things the web panel has are deliberately absent. Its Mute checkbox
-  silences the browser's own players without touching the stored level, and
-  Mudlet has no primitive that does that, so a box that only pretended to
-  would be worse than none. Its four sound-effect sliders are display:none
-  there because nothing plays through those categories yet; here they are
-  `ui music volume <name>` instead. Next, stop and the mode are `ui music`
-  verbs for the same reason - the panel does not show them either.
+  A web track row carries two controls - a checkbox for the playlist, a title
+  that plays - and so does this one: MDW menu rows take `onCheck` for the box
+  and `onClick` for the rest of the row. That capability was added for this
+  menu (MDW 0.9.3); the row is one row, as the web's is.
 
   Two packages feed it and it asks for neither: Game.Music is the shared
   catalog (fixed for the life of the server process) and Char.Audio this
   character's own settings, pushed after every change. Both ride the login
-  batch and SendFullPayload, which buildUI already requests, so the widget
-  renders an empty state until they land and repaints on the push.
+  batch and SendFullPayload, which buildUI already requests, so the menu is
+  short until they land. Its `items` is a FUNCTION, so every open re-reads
+  them and nothing has to repaint on a push.
 
   This is the ONE surface in the package whose affordances are not real game
   commands. The `music` command answers with feedback, and a slider drag or a
-  menu tick must not fill the main window with it, so audio has a silent
+  box tick must not fill the main window with it, so audio has a silent
   write node of its own - Char.Audio.Set (guide 5.16). Every field of it
   still maps to a command a player could type, which is the outbound rule
   kept in spirit.
@@ -46,7 +45,7 @@
 -- table always encodes to the same bytes, which is what makes a written
 -- request something a test can compare against.
 local AUDIO_FIELDS = { "mode", "playlist", "repeat", "shuffle", "volumes",
-  "music_volume", "track", "next" }
+  "music_volume", "track", "next", "ended" }
 
 -- The MSP sound categories Char.Audio.volumes is keyed by, in the order the
 -- widget and `ui music` both list them. `environment` is reserved - nothing
@@ -182,161 +181,227 @@ function mdwui.setMusicVolume(key, value)
   end
 end
 
----------------------------------------------------------------------------
--- THE WIDGET
----------------------------------------------------------------------------
-
---- A checkbox drawn in text, the whole thing one clickable cell. The web
--- panel's LAYOUT is what this widget copies; the colours stay the package's
--- own (C.link, like every other affordance here), so an MDW theme reaches
--- this widget the way it reaches the rest of the UI.
-local function checkbox(on)
-  return string.format("<%s>[%s]", mdwui.config.colors.link, on and "x" or " ")
-end
-
---- Repaint from Game.Music and Char.Audio.
-function mdwui.renderMusic()
-  local widget = mdwui.w("Music")
-  if not widget then return end
-  -- Under an MDW predating the rows API the widget simply stays empty.
-  if not (mdw and mdw.setWidgetRows) then return end
-  local cfg = mdwui.config
-  local C = cfg.colors
-  local g = cfg.gauges
-  local a = audio()
-  local playing = mdwui.musicTrack(a.track)
-  -- A build without slider rows still shows the level, as a plain gauge
-  -- (MDW's own advice for the capability, and the reason rowTypes exists).
-  local slider = mdw.rowTypes and mdw.rowTypes.slider
-
-  -- The master volume, unlabelled and unnumbered like the web panel's: it is
-  -- the only slider here, so there is nothing for a word to tell apart. No
-  -- onPreview either - with no label to relabel, a drag has nothing to say
-  -- until it commits. The four sound-effect levels are `ui music volume`
-  -- only: nothing in this game plays through them yet, and the web panel
-  -- hides its own category sliders for the same reason.
-  local volume = {
-    id = "vol_music", type = slider and "slider" or "gauge",
-    value = tonumber(a.music_volume) or 0, max = 100, step = 5, text = "",
-    front = mdwui.fillCss(g.aeFill), back = mdwui.trackCss(g.aeTrack),
-    fgColor = g.textColor, fontSize = g.fontSize,
-  }
-  if slider then
-    volume.onChange = function(value) mdwui.setMusicVolume("music", value) end
-  end
-  local rows = {
-    volume,
-    -- Same header style as the Combat widget's sections (Combat.lua's
-    -- `header`), so the two panels read as one UI.
-    { id = "hdr", type = "text", height = g.headerHeight, fontSize = g.headerFontSize,
-      text = string.format("<%s>Music", C.charLabel) },
-    { id = "hint", type = "text", fontSize = g.headerFontSize,
-      text = string.format("<%s>Click title to play. Check box to add to playlist.",
-        C.dim) },
-  }
-  mdw.setWidgetRows("Music", rows)
-
-  local co = widget.content
-  co:clear()
-  -- The server sends no MSP at all while this is off, whatever the rest of
-  -- the payload says (guide 5.16), so say so before the list of things that
-  -- will not play. Kept although the web panel has no such line: there a
-  -- silent click is at least a click on a player that exists. `config sound
-  -- on` is a real typed command, unlike every other affordance here.
-  if a.sound == false then
-    co:decho(string.format("<%s>Sound is off. Turn it on with ", C.dim))
-    mdwui.link(co, string.format("<%s>config sound on", C.link), "config sound on",
-      "Turn game sound back on")
-    co:decho(string.format("<%s>.\n", C.dim))
-  end
-
-  local tracks = mdwui.tbl(catalog().tracks)
-  if #tracks == 0 then
-    co:decho(string.format("<%s>No music has arrived from the server yet.\n", C.faint))
-    return
-  end
-
-  local known = audioKnown()
-  -- Catalog order, which is the order `music list` shows and the order a
-  -- playlist plays in (guide 5.16).
-  for _, track in ipairs(tracks) do
-    local id = track.id
-    if type(id) == "string" and id ~= "" then
-      local title = tostring(track.title or id)
-      local member = inPlaylist(id)
-      -- The package's own playing marker: C.good is what every other
-      -- renderer here says "this one is live" with.
-      local titleColor = (playing ~= nil and playing.id == id) and C.good or C.link
-      local box = checkbox(member)
-      -- No playlist edits until Char.Audio has been seen: the write replaces
-      -- the list, so building one from what we have not been told wipes it.
-      -- The box still DRAWS - the web renders it unclickable too.
-      if known then
-        co:dechoLink(box,
-          member and function() removeFromPlaylist(id) end
-            or function() addToPlaylist(id) end,
-          member and ("Remove " .. title .. " from the playlist")
-            or ("Add " .. title .. " to the playlist"), true)
-      else
-        co:decho(box)
-      end
-      co:decho(" ")
-      co:dechoLink(string.format("<%s>%s", titleColor, title),
-        function() mdwui.audioSet({ track = id }) end, "Play " .. title, true)
-      co:decho("\n")
-    end
-  end
-
-  co:decho("\n")
-  -- Repeat and Shuffle, the web's two boxes under the list. Same gate as the
-  -- track boxes: before the first push there is no current value to flip.
-  local first = true
-  for _, def in ipairs({ { "repeat", "Repeat" }, { "shuffle", "Shuffle" } }) do
-    local key, label = def[1], def[2]
-    local on = a[key] and true or false
-    if not first then co:decho("   ") end
-    first = false
-    local text = checkbox(on) .. " " .. label
-    if known then
-      co:dechoLink(text, function() mdwui.audioSet({ [key] = not on }) end,
-        string.format("Turn %s %s", label:lower(), on and "off" or "on"), true)
-    else
-      co:decho(text)
-    end
-  end
-  co:decho("\n")
-end
-
---- Char.Audio is the answer to every write, so every control here waits for
--- it rather than painting itself: a box ticks because the server said so.
+--- Char.Audio is the answer to every write, so every control waits for it
+-- rather than painting itself: a box ticks because the server said so - which
+-- means the click that writes redraws STALE, because the answer has not
+-- arrived yet. Re-declaring is what fixes that: MDW repaints an open menu on
+-- a re-declaration (0.9.3), so the box catches up the moment the push lands
+-- rather than at the player's next open. It carries the header button's
+-- muted/unmuted text too.
 function mdwui.onCharAudio()
-  mdwui.renderMusic()
+  mdwui.setupSoundMenu()
 end
 
 ---------------------------------------------------------------------------
 -- TRACK-END RELAY (guide 5.16)
--- A playlist track is sent with L=1 so it plays once and the client says
--- when it ended; the server picks the next one on {"next":true}. Nothing
--- else advances a playlist, and no timer stands in for this - a track that
--- has run out is the only honest signal.
+-- A track the server wants an end from is sent with L=1 so it plays one pass
+-- and the client says when it ended. The server decides what that end means
+-- and answers on {"next":true,"ended":...}. Nothing else advances a playlist,
+-- and no timer stands in for this - a track that has run out is the only
+-- honest signal.
 ---------------------------------------------------------------------------
 
 local function baseName(path)
   return tostring(path or ""):match("([^/\\]+)$") or ""
 end
 
---- Mudlet raises sysMediaFinished for every media file it finishes, ours or
--- not: sound effects come through here too, and so does a looping track from
--- server mode (L=-1, which needs no relay). Hence the four conditions -
--- music, playlist mode, something playing, and the file that ended being
--- that track's.
+--- Ask the server to play `id`.
+function mdwui.playTrack(id)
+  mdwui.audioSet({ track = id })
+end
+
+--- Relay EVERY finished music file, with the name of the file that ended.
+-- The SERVER decides what an end means - the next playlist track, the login
+-- intro being over and the player's own music taking the music back, or
+-- nothing at all - and it already drops the reports it cannot use: a track
+-- that loops, a file that is not the one playing now, a player who is not in
+-- playlist mode. So the relay needs no conditions beyond the media type.
+--
+-- It used to test the mode and the current track, and both had to go. The
+-- login intro plays before the world does, and it is not in Char.Audio at
+-- all, so a check against the current track would never relay its end - and
+-- its end is what starts the player's music after login.
+--
+-- The name is what keeps a switch honest: Mudlet raises sysMediaFinished for
+-- a track it STOPPED as well as one that ran out, and every track switch
+-- stops the old track first. The server sees a name that is no longer the
+-- track playing and drops it, instead of advancing the playlist past the
+-- song just picked.
 function mdwui.onMediaFinished(_, fileName, _, mediaType)
   if mediaType ~= "music" then return end
+  mdwui.audioSet({ next = true, ended = baseName(fileName) })
+end
+
+---------------------------------------------------------------------------
+-- THE SOUND HEADER MENU (mdw.addHeaderMenu + slider rows, MDW 0.9.3)
+-- The whole sound surface, in the place the web client puts it. See the file
+-- header for the row-for-row mapping and the one shape that cannot match.
+--
+-- GUARDED on the function's existence rather than gated by
+-- mdwui.minMdwVersion, unlike the other MDW calls in buildUI: this API is
+-- newer than the pinned minimum, so a player on the pin gets the UI without
+-- the menu instead of a refused build. Raise the pin and this guard becomes
+-- decoration, but it costs one `if`.
+---------------------------------------------------------------------------
+
+-- The muted state is spelled out in the button rather than drawn: the header
+-- renders at headerMenuFontSize, and a speaker icon at that size is too small
+-- to read as anything. A word survives the size; a 12px glyph does not.
+local MUTED_SUFFIX = " (Muted)"
+
+--- Is game audio muted? Mudlet's own client-side mute, NOT a volume of zero:
+-- the web client mutes the same way (a global gain over the sliders,
+-- audio.js applyMuteState), leaving the server's stored levels alone so
+-- unmuting comes back to what the player chose. Writing 0 through GMCP would
+-- overwrite those levels and lose them.
+--
+-- pcall because getConfig and this key are newer than the oldest Mudlet this
+-- package runs on; an unknown key must read as "not muted", not as an error
+-- inside a menu getter.
+function mdwui.soundMuted()
+  local ok, muted = pcall(function() return getConfig("muteMediaGame") end)
+  return (ok and muted) and true or false
+end
+
+--- Flip it, then re-declare the menu so the button follows. The title is a
+-- plain string by contract (mdw.addHeaderMenu rejects a function), but a
+-- re-declaration with a new one repaints the button and re-runs
+-- layoutHeaderButtons - so the state is live without the API having to grow a
+-- getter, and the button re-measures for the longer title.
+function mdwui.toggleSoundMute()
+  local muted = not mdwui.soundMuted()
+  local ok = pcall(function() setConfig("muteMediaGame", muted) end)
+  if not ok then
+    mdwui.say("This Mudlet cannot mute game audio; set the volumes to 0 instead.")
+    return
+  end
+  mdwui.setupSoundMenu()
+end
+
+--- The rows, rebuilt on every open (MDW re-reads an `items` function then), so
+-- they show what the server last sent rather than what it sent at build time.
+--
+-- The order is the web sound menu's: slider, Mute, divider, Music header and
+-- hint, the catalog, Repeat/Shuffle. The catalog appears twice for the reason
+-- in the file header - one click per row, two controls per web row.
+local function soundMenuItems()
+  local g = mdwui.config.gauges
   local a = audio()
-  if a.mode ~= "playlist" then return end
-  local track = mdwui.musicTrack(a.track)
-  if not track then return end
-  local wanted = baseName(track.file)
-  if wanted == "" or baseName(fileName) ~= wanted then return end
-  mdwui.audioSet({ next = true })
+  local rows = {}
+  local function add(row) rows[#rows + 1] = row end
+
+  -- "Volume [====] [ ] Mute" as ONE row. The web menu stacks its slider over
+  -- its Mute box; a dropdown row is wide and shallow, so the two sit together
+  -- and the card is two rows shorter. The four sound-effect levels stay on
+  -- `ui music volume` - the web menu hides its own category sliders because
+  -- nothing plays through them yet.
+  add({ parts = {
+    { label = "Volume" },
+    (mdw.bindSlider and {
+      type = "slider", flex = true,
+      value = tonumber(a.music_volume) or 0, max = 100, step = 5, text = "",
+      front = mdwui.fillCss(g.volFill), back = mdwui.trackCss(g.volTrack),
+      fgColor = g.textColor,
+      -- Raising the volume off zero is a request to hear something, so unmute
+      -- - changeWebclientVolume does exactly this.
+      onChange = function(value)
+        mdwui.setMusicVolume("music", value)
+        if value > 0 and mdwui.soundMuted() then mdwui.toggleSoundMute() end
+      end,
+    }) or { label = "(no slider on this MDW)" },
+    { label = "Mute", checked = mdwui.soundMuted,
+      onCheck = function() mdwui.toggleSoundMute() end },
+  } })
+  add({ separator = true })
+
+  local tracks = mdwui.tbl(catalog().tracks)
+  if #tracks == 0 then
+    -- A menu that currently lists nothing still says why: the catalog rides
+    -- the login batch, so this is what an early open sees.
+    add({ label = "No music has arrived yet" })
+    return rows
+  end
+
+  -- No playlist edits until Char.Audio has been seen: the write replaces the
+  -- list whole, so building one from what we have not been told wipes it. The
+  -- web swallows the same click for the same reason - and the boxes still
+  -- DRAW either way.
+  local known = audioKnown()
+
+  -- Repeat and Shuffle lead, on one row: they describe how the list below is
+  -- played, so they belong above it rather than after a scroll of songs.
+  add({ parts = {
+    { label = "Repeat", checked = function() return a["repeat"] and true or false end,
+      onCheck = known and function()
+        mdwui.audioSet({ ["repeat"] = not a["repeat"] })
+      end or nil },
+    { label = "Shuffle", checked = function() return a.shuffle and true or false end,
+      onCheck = known and function()
+        mdwui.audioSet({ shuffle = not a.shuffle })
+      end or nil },
+  } })
+  -- Inert by construction: no onClick, no onCheck, so MDW gives it no cursor
+  -- and no hover. It is a caption, and one that lit up under the pointer
+  -- would read as a button that does nothing.
+  add({ label = "Click a title to play. Tick a box for the playlist." })
+
+  for _, track in ipairs(tracks) do
+    local id = track.id
+    if type(id) == "string" and id ~= "" then
+      local title = tostring(track.title or id)
+      add({
+        -- The playing one says so in the label rather than in a colour: a
+        -- menu row has one colour, and it is the highlight the pointer owns.
+        label = function()
+          local now = mdwui.musicTrack(audio().track)
+          return title .. ((now and now.id == id) and "  (playing)" or "")
+        end,
+        checked = function() return inPlaylist(id) end,
+        onCheck = known and function()
+          if inPlaylist(id) then removeFromPlaylist(id) else addToPlaylist(id) end
+        end or nil,
+        -- keepOpen like the boxes: picking a song is not navigation, and the
+        -- player is usually picking a few things in a row.
+        keepOpen = true,
+        onClick = function() mdwui.playTrack(id) end,
+      })
+    end
+  end
+
+  -- The two ends of the playlist, spelled out rather than left implied by the
+  -- mode field: nothing on this card otherwise says who is choosing.
+  add({ separator = true })
+  add({ label = "Play playlist", keepOpen = true,
+    onClick = function() mdwui.audioSet({ mode = "playlist" }) end })
+  add({ label = "Clear playlist and let game control music", keepOpen = true,
+    onClick = function() mdwui.audioSet({ playlist = {}, mode = "server" }) end })
+
+  -- The server sends no MSP at all while this is off, whatever the rest of
+  -- the payload says (guide 5.16), so say so under the controls that will not
+  -- be heard. `config sound on` is a real typed command, unlike everything
+  -- else here.
+  if a.sound == false then
+    add({ separator = true })
+    add({ label = "Sound is off - click to turn it on",
+      onClick = function() send("config sound on", false) end })
+  end
+  return rows
+end
+
+--- Declared from buildUI, like the gear row: MDW stamps it with this package
+-- and reaps it with us, and a re-declaration replaces the menu in place
+-- rather than adding a second button.
+--
+-- The title follows the package's own Mute row. A mute made from Mudlet's
+-- toolbar instead is only picked up on the next re-declaration: Mudlet raises
+-- no event for it (its media events are started, paused and finished), and
+-- polling the setting is not worth a timer. The right fix is an event in
+-- Mudlet itself.
+function mdwui.setupSoundMenu()
+  if not (mdw and mdw.addHeaderMenu) then return end
+  mdw.addHeaderMenu({
+    id = "sound",
+    title = "Sound" .. (mdwui.soundMuted() and MUTED_SUFFIX or ""),
+    items = soundMenuItems,
+  })
 end

@@ -253,7 +253,6 @@ mdwui.widgetSynonyms = {
   keys = "Keyring", herbs = "Forage",
   grp = "Group", party = "Group",
   fight = "Combat", buffs = "Affects", effects = "Affects",
-  music = "Music", audio = "Music", playlist = "Music",
   conn = "Connection", net = "Connection", bandwidth = "Connection",
 }
 
@@ -342,7 +341,7 @@ local COMBAT_KEYS = { "hp", "ae", "balance", "enemy", "info" }
 -- `ui music`: the settings, then the two actions, then the levels. Each one
 -- writes through Char.Audio.Set (guide 5.16), the same silent node the widget
 -- uses, so the keyboard and the mouse cannot describe the audio differently.
-local MUSIC_KEYS = { "repeat", "shuffle", "mode", "next", "stop", "volume" }
+local MUSIC_KEYS = { "repeat", "shuffle", "mode", "mute", "next", "stop", "volume", "clear" }
 local MUSIC_MODES = { "server", "playlist" }
 local JOURNAL_CATEGORIES = { "books", "documents", "quests", "rumors", "observations", "notes" }
 
@@ -1085,9 +1084,11 @@ COMMANDS = {
     end },
 
   { name = "music", aliases = { "audio" },
-    usage = "ui music [repeat|shuffle [on|off]|mode server|playlist|next|stop|volume <name> <0-100>]",
+    usage = "ui music [repeat|shuffle|mute [on|off]|mode server|playlist|next|stop|clear"
+      .. "|volume <name> <0-100>]",
     help = "The music: what is playing, the playlist, repeat and shuffle, who picks the track, "
-      .. "and the five levels. Volume names: music combat movement environment other.",
+      .. "mute, and the five levels. `clear` empties the playlist and hands the choosing back "
+      .. "to the game. Volume names: music combat movement environment other.",
     run = function(words)
       local audio = mdwui.tbl(mdwui.tbl(gmcp and gmcp.Char).Audio)
       -- Every level the game keeps, the music one first. Read here rather
@@ -1134,6 +1135,26 @@ COMMANDS = {
       if key == "next" then
         mdwui.audioSet({ next = true })
         mdwui.say("Skipping to the next track.")
+        return
+      end
+      -- Mute is Mudlet's own client-side switch, not a volume of zero, so it
+      -- is read and written through the Sound menu's helpers rather than
+      -- through Char.Audio.Set - the stored levels must survive it.
+      if key == "mute" then
+        local value = parseOnOff(words[3], mdwui.soundMuted())
+        if value == nil then
+          mdwui.say("Say on or off, not '" .. plain(words[3]) .. "'.")
+          return
+        end
+        if value ~= mdwui.soundMuted() then mdwui.toggleSoundMute() end
+        mdwui.say(string.format("Game audio %s.", value and "muted" or "unmuted"))
+        return
+      end
+      -- One body, so the server never sees an emptied list still in playlist
+      -- mode - the same write the Sound menu's own row makes.
+      if key == "clear" then
+        mdwui.audioSet({ playlist = {}, mode = "server" })
+        mdwui.say("Playlist cleared; the game picks the music again.")
         return
       end
       if key == "stop" then
@@ -1651,6 +1672,9 @@ for _, key in ipairs(COMBAT_KEYS) do
       return mdwui.settings("combat", mdwui.config.combatDefaults)[key] and true or false
     end }
 end
+ONOFF_ROWS[#ONOFF_ROWS + 1] = { cmd = "music mute", link = "music mute",
+  opts = "on|off   silence the game's music and sounds",
+  value = function() return mdwui.soundMuted() end }
 ONOFF_ROWS[#ONOFF_ROWS + 1] = { cmd = "numpad", link = "numpad", opts = "on|off   numpad walking",
   value = function() return mdwui.numpadWalking() and true or false end }
 
@@ -1736,7 +1760,7 @@ local OVERVIEW = {
         local audio = mdwui.tbl(mdwui.tbl(gmcp and gmcp.Char).Audio)
         return (audio.mode and audio.mode ~= "") and tostring(audio.mode) or "-"
       end,
-      opts = "repeat|shuffle|mode|next|stop|volume <name> <0-100>" },
+      opts = "repeat|shuffle|mute|mode|next|stop|clear|volume <name> <0-100>" },
     -- The value is the one figure the command exists to report, from whatever
     -- the last answer held; "-" until something has been asked for.
     { cmd = "connection", link = "connection",

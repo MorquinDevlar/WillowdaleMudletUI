@@ -178,7 +178,6 @@ function mdwui.renderAll()
   mdwui.renderCombat()
   mdwui.renderQuests()
   mdwui.renderJournal()
-  mdwui.renderMusic()
   mdwui.renderConnection()
   mdwui.renderTopBar()
   mdwui.updatePromptBar()
@@ -293,9 +292,14 @@ function mdwui.buildUI()
   -- merged them the same way). A saved layout from that version still
   -- restores "PlayerJournal", so retire it rather than leave an empty panel
   -- docked forever.
-  local stale = mdw.widgets["PlayerJournal"]
-  if stale and stale.destroy then stale:destroy() end
-  mdwui.state.widgets["PlayerJournal"] = nil
+  -- ...and the Music widget, retired the same way for the same reason: the
+  -- Sound header menu carries the web client's sound panel now, and two
+  -- surfaces for one thing is what this removed.
+  for _, gone in ipairs({ "PlayerJournal", "Music" }) do
+    local stale = mdw.widgets[gone]
+    if stale and stale.destroy then stale:destroy() end
+    mdwui.state.widgets[gone] = nil
+  end
 
   -- The gameConfig seeds merge only during MDW setup; a mid-session install
   -- builds without one, so apply the live-relevant settings directly
@@ -325,7 +329,6 @@ function mdwui.buildUI()
     -- Ambient music: the catalog, the playlist, and the volume levels
     -- (guide 5.16). It needs no request of its own - both its packages ride
     -- the full payload buildUI already asks for.
-    { "Music", mdwui.renderMusic, { dock = "right" } },
     -- What the session costs on the wire (guide 5.17). CLOSED on a first
     -- run - see below - so it is the one widget here whose default is not to
     -- be there: it answers a question a player asks occasionally, and the
@@ -394,7 +397,7 @@ function mdwui.buildUI()
   local statusStack = defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", created)
   local itemsStack = defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", created)
   defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left", created)
-  defaultGroup({ "Comm", "Quests", "Journal", "Music" }, "MDWUI_Comms", "right", created)
+  defaultGroup({ "Comm", "Quests", "Journal" }, "MDWUI_Comms", "right", created)
   -- AFTER every group exists, never during: see defaultHeight. Until the
   -- character group is created, the items group is the dock's bottom row and
   -- anything set on it is discarded.
@@ -416,6 +419,9 @@ function mdwui.buildUI()
   -- by id, and killAllTimers above has already taken the previous poll.
   mdwui.setupConnectionMenu()
   mdwui.startConnectionPoll()
+  -- The Sound header menu, re-declared per build for the same reason and
+  -- replaced by id the same way.
+  mdwui.setupSoundMenu()
 
   -- Numpad walking. Not a widget, but this is the first point where the
   -- player's saved choice exists: MDW restores mdw.gameSettings in
@@ -590,9 +596,10 @@ local handlers = {
   end,
 
   -- Music (guide 5.16). The catalog is static for the session and the
-  -- settings arrive after every change, from this client or any other, so
-  -- both simply repaint the widget.
-  ["gmcp.Game.Music"] = function() mdwui.renderMusic() end,
+  -- settings arrive after every change, from this client or any other. The
+  -- Sound menu reads both when it opens, so the only thing a push has to
+  -- repaint is the header button's own muted/unmuted text.
+  ["gmcp.Game.Music"] = function() mdwui.setupSoundMenu() end,
   ["gmcp.Char.Audio"] = function() mdwui.onCharAudio() end,
 
   -- Connection stats (guide 5.17). Pull-only: this only ever fires as the

@@ -30,6 +30,57 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Added
+- A "Sound" menu in the header bar, next to Font Size and Theme - the web
+  client's own sound menu: a volume slider you drag with Mute beside it,
+  Repeat and Shuffle, the music catalog with a tick box for the playlist and
+  a title that plays, and rows to play the playlist or clear it and hand the
+  music back to the game. The button reads "Sound (Muted)" while muted, so you
+  can see at a glance whether the game is making noise. Mute is Mudlet's own
+  client-side mute, so your volume levels are untouched and come back exactly
+  as they were. Needs MDW 0.9.3; on an older MDW the rest of the UI is
+  unaffected and the menu simply does not appear.
+- `ui music mute [on|off]` silences the game's music and sound effects from
+  the keyboard - the same switch as the Sound menu's Mute box, and it leaves
+  your volume levels untouched.
+- `ui music clear` empties your playlist and hands the choosing of music back
+  to the game, the keyboard route to the Sound menu's last row.
+
+### Removed
+- The Music widget. The Sound menu above carries everything it did, in the
+  place the web client puts it, so the panel is gone rather than duplicated -
+  it disappears from your layout on the next start, and `ui show music` is no
+  longer a thing to type. Everything else about music is unchanged, including
+  the whole `ui music` command.
+
+### Fixed
+- Playing a track now keeps it playing. The report that a track finished names
+  the file it was, so the stop that happens as one track hands over to the next
+  is no longer read as the end of a track and no longer jumps your playlist to
+  the top a second after you asked for something else.
+- Picking a song in the Sound menu while another was playing stopped the music
+  instead of switching to it. The interrupted track was being reported to the
+  server as having finished, which advanced the playlist straight past the
+  song just picked.
+
+### Changed
+- Every music track that finishes is now reported to the game, not only the
+  ones on your playlist. The login music can play to its end before your own
+  track or the music of the place you are standing takes over.
+- Affect durations now line up in a column down the right edge of the panel
+  instead of trailing each name, and a permanent affect reads "Permanent"
+  rather than "perm", in a faint italic against the lighter countdowns.
+  Permanent affects also sort to the top of the list, so an expiring
+  countdown no longer reshuffles the rows around them.
+- The gear menu's Connection Stats row is now a plain "Show connection
+  stats" / "Hide connection stats" action instead of a checkbox, and the
+  wording follows the panel however you closed it - the row, the Widgets
+  menu, or the panel's own X.
+- The left sidebar now starts 320px wide instead of 250, so the Character and
+  Affects panels fit their two columns without clipping names. Only on a
+  profile that has never had the sidebar dragged: your own width still wins,
+  and `ui reset` returns to 320.
+
 ## 0.5.1 - 2026-09-06
 
 ### Changed

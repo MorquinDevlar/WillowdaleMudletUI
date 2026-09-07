@@ -33,6 +33,11 @@ read_globals = {
   -- The MDW bootstrap asks whether MDW is installed before uninstalling it
   -- (getPackages is Mudlet 4.12+, hence the guard at the call site).
   "getPackages",
+  -- Client-side audio mute (Music.lua's Sound menu). Both are pcall-wrapped
+  -- at the call site: the key is newer than the oldest Mudlet this package
+  -- runs on, and an unknown one must read as "not muted", not throw.
+  "getConfig",
+  "setConfig",
   -- Mudlet's TableUtils.lua extends the stdlib table with contains().
   table = { fields = { "contains" } },
   "getModulePath",

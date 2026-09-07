@@ -97,10 +97,20 @@ function mdwui.renderAffects()
   local affects = mdwui.tbl(gmcp and gmcp.Char and gmcp.Char.Affects)
   local co = widget.content
   co:clear()
+  local W = mdwui.wrapWidth(widget, 24)
 
+  -- updateAffectsPanel's own comparator: permanent first, then by name. The
+  -- affects that will still be there sit as a stable block at the top, so a
+  -- countdown expiring never reshuffles them.
+  local function perm(name)
+    return (tonumber(affects[name].duration_current) or 0) < 0
+  end
   local names = {}
   for name in pairs(affects) do names[#names + 1] = name end
-  table.sort(names)
+  table.sort(names, function(a, b)
+    if perm(a) ~= perm(b) then return perm(a) end
+    return a < b
+  end)
 
   if #names == 0 then
     co:decho(string.format("<%s>No active affects\n", C.dim))
@@ -115,8 +125,17 @@ function mdwui.renderAffects()
       remaining = math.max(0, remaining - elapsed)
     end
     local color = (a.type == "state") and C.warn or C.good
-    co:decho(string.format("<%s>%s <%s>%s\n",
-      color, a.name or name, C.dim, mdwui.fmtDuration(remaining)))
+    -- The web's .aff-row: name left, duration flush right (space-between and
+    -- text-align: right), so the durations read as a column instead of
+    -- trailing each name at its own indent. A permanent one takes
+    -- .aff-permanent's faint italic against the parchment .aff-duration wears,
+    -- since it is the one value in the column that never changes.
+    local dur = mdwui.fmtDuration(remaining)
+    local durColor, open, close = C.charHeader, "", ""
+    if perm(name) then durColor, open, close = C.faint, "<i>", "</i>" end
+    local label, labelW = mdwui.clipText(a.name or name, math.max(4, W - #dur - 1))
+    co:decho(string.format("<%s>%s%s<%s>%s%s%s\n", color, label,
+      string.rep(" ", math.max(1, W - labelW - #dur)), durColor, open, dur, close))
   end
 end
 

@@ -213,9 +213,12 @@ function mdwui.saveSettings()
 end
 
 --- "MM:SS" / "1h02m" style short duration; -1 is permanent (guide 8.5).
+-- Spelled out and capitalised for the permanent case, as the web client's
+-- formatAffectDuration writes it - the one value in the column that is words
+-- rather than digits, so an abbreviation reads as a truncation.
 function mdwui.fmtDuration(seconds)
   seconds = tonumber(seconds) or 0
-  if seconds < 0 then return "perm" end
+  if seconds < 0 then return "Permanent" end
   if seconds >= 3600 then
     return string.format("%dh%02dm", math.floor(seconds / 3600), math.floor(seconds % 3600 / 60))
   end
@@ -516,6 +519,9 @@ function mdwui.onUninstall(_, package)
   -- click into a widget that no longer exists. MDW's ownership reap gets it
   -- too, but only if its handler runs before we clear mdw.gamePackages below.
   if mdw and mdw.removeMenuItem then mdw.removeMenuItem("connection") end
+  -- The Sound header menu, for the same reason: mdw.gameHeaderMenus survives
+  -- a teardown too, and a button left in the header would outlive us.
+  if mdw and mdw.removeHeaderMenu then mdw.removeHeaderMenu("sound") end
   -- The top bar too. MDW's own ownership reap would get it, but only if its
   -- handler sees our mdw.gamePackages entry before we clear it below - the
   -- event handler order is not ours to rely on.

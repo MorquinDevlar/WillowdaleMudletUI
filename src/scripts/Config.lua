@@ -167,7 +167,7 @@ mdwui.config = {
   hpMidPct = 0.66,
 
   -- Graphical gauges (prompt layer, Combat widget, Group widget, and the
-  -- Music widget's volume slider). The Qt colors transcribe webclient.css
+  -- Sound menu's volume slider). The Qt colors transcribe webclient.css
   -- exactly: translucent track, 60%-alpha fill, #333 frame, 4px radius; HP's
   -- fill shifts amber/red at the shared thresholds, Balance dims while
   -- draining, group members band by percent.
@@ -193,6 +193,11 @@ mdwui.config = {
     balTrack = "rgba(40,80,160,20%)",
     balFill = "rgba(60,110,200,60%)",
     balFillDrain = "rgba(50,90,160,50%)",
+    -- The Sound menu's volume slider. Its own hue rather than a borrowed
+    -- one: it is not a vital, it sits in a dropdown beside no other gauge,
+    -- and orange is the accent the header around it is drawn in.
+    volTrack = "rgba(200,130,45,20%)",
+    volFill = "rgba(200,130,45,65%)",
     enemyTrack = "rgba(180,50,50,20%)",   -- .combat-enemy-gauge-bar
     enemyFill = "rgba(200,60,60,60%)",
     grpTrack = "#111111",                 -- .gauge-bar base (group rows)
@@ -237,7 +242,7 @@ mdwui.config = {
     label   = "198,183,138", -- section labels / slot names
     text    = "200,200,200", -- default body text
     dim     = "120,120,120", -- empty slots, timestamps, de-emphasis
-    faint   = "102,102,102", -- empty-state texts (-nothing-, empty lists; #666)
+    faint   = "102,102,102", -- empty states, .aff-permanent (#666)
     good    = "95,225,95",   -- healthy / positive
     warn    = "225,200,80",  -- mid health / attention
     bad     = "225,90,90",   -- low health / hostile
@@ -264,8 +269,9 @@ mdwui.config = {
 
     -- Shared web-client panel palette: webclient.css .char-* transcribed
     -- exactly, reused wherever the web client reuses the same hex - the
-    -- keychain table's .key-type is this gold, .key-location this parchment,
-    -- .key-where and every header row this label gray.
+    -- keychain table's .key-type is this gold, .key-location and the affects
+    -- panel's .aff-duration this parchment, .key-where and every header row
+    -- this label gray.
     charHeader  = "232,220,200", -- .char-header-name / .key-location (#e8dcc8)
     charGold    = "196,163,90",  -- .char-header-class / .key-type (#c4a35a)
     charAttr    = "109,186,109", -- .char-attr core attributes (#6dba6d)
@@ -423,6 +429,13 @@ mdw.gameConfig.usePromptTrigger = false
 -- defaults). Re-enabling the Vitals line grows the bar via
 -- ensurePromptBarHeight at toggle time.
 mdw.gameConfig.promptBarHeight = 48
+-- Wider than MDW's 250 for the same reason, and only on a fresh profile: the
+-- left dock carries the two-column panels - Character's label/value pairs,
+-- Affects' name against its right-aligned duration - and at 250 those columns
+-- meet in the middle with names clipped. 320 is about 44 characters at the
+-- default content font size. The right dock keeps MDW's width: it holds Comm
+-- and the map, which take whatever they are given.
+mdw.gameConfig.leftDockWidth = 320
 
 -- MDW runs this on every UI build (install, profile load, MDW update). The
 -- closure indirection matters: buildUI is defined in a later script, but is

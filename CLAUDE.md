@@ -244,6 +244,30 @@ checks the JSON against the web client's `codeShortcuts`.
 state on every build. Rule: every new widget or player-facing toggle gets a
 `ui` verb and a smoke check in the same change.
 
+The `Sound` HEADER menu is the other half of that split, and the rule between
+them: a gear row is one action, a header menu is a SET of choices. It is the
+web client's site-nav sound menu row for row - slider, Mute, divider, catalog,
+Repeat/Shuffle - and it REPLACED a Music widget that drew the same panel: one
+surface for sound, in the place the web client puts it. The widget is retired
+on sight in `buildUI`, beside `PlayerJournal`, because a saved layout still
+restores it. A track row carries the web's two controls on ONE row - the box
+adds to the playlist, the title plays - via MDW's `onCheck`, which was added
+for this menu rather than working around a row with one click.
+`mdwui.setupSoundMenu` (Music.lua) declares it from `buildUI` the same way, and
+`mdwui.onUninstall` withdraws it by hand for the same reason
+(`mdw.gameHeaderMenus` outlives a teardown too). It is the ONE MDW call in
+`buildUI` that is guarded on existence rather than covered by the version
+gate - `mdw.addHeaderMenu` is newer than `mdwui.minMdwVersion`, and a player
+on the pin must get the UI without the menu rather than a refused build. Two
+things about it are load-bearing: MUTE is Mudlet's own
+`setConfig("muteMediaGame")`, never a volume of zero through GMCP, because the
+web client mutes client-side too and a zero would overwrite the levels the
+player chose; and the muted state reaches the button by RE-DECLARING the menu,
+since `title` must be a plain string. It is the WORD "(Muted)", not an icon:
+the header draws at `headerMenuFontSize`, where a speaker glyph is too small
+to read as anything - tried in a live client with two glyphs merged into the
+bundled font, and both the icon and the font change were reverted.
+
 The gear (admin) dropdown is MDW's, and `mdw.addMenuItem` (MDW 0.7, which is
 what the current pin buys) is how this package puts a row in it -
 `mdwui.setupConnectionMenu`, declared from `buildUI` so MDW stamps the row with

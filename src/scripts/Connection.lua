@@ -211,10 +211,16 @@ end
 function mdwui.setupConnectionMenu()
   mdw.addMenuItem({
     id = "connection",
-    label = "Connection Stats",
-    -- A getter: the gear rebuilds on every open, so the tick tracks the
-    -- panel however it was closed - the row, the Widgets menu, or its own X.
-    checked = function() return shown() end,
+    -- A LABEL getter and no checkbox: the row names the action it performs,
+    -- the way the Sidebars rows do not have to because a sidebar is always
+    -- there to tick. This panel is off by default and off most of the time,
+    -- so an unticked box reads as "unavailable" where "Show connection stats"
+    -- reads as the thing to click. MDW resolves the getter on every gear
+    -- open, which is what keeps the wording honest however the panel was
+    -- closed - this row, the Widgets menu, or the panel's own X.
+    label = function()
+      return shown() and "Hide connection stats" or "Show connection stats"
+    end,
     onClick = function() mdwui.toggleConnection() end,
   })
 end

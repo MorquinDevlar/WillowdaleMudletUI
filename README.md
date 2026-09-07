@@ -8,8 +8,8 @@ GMCP feed:
 ```
 Left dock                      Center            Right dock
   [Affects | Keyring]          Main display        [Map]  (native mapper)
-  [Equipment | Inventory |                          [Comm | Quests | Journal
-   Forage]                                           | Music]
+  [Equipment | Inventory |                          [Comm | Quests | Journal]
+   Forage]
   [Character | Combat | Group]
 ```
 
@@ -28,10 +28,13 @@ Left dock                      Center            Right dock
   Quests category holding the full filterable quest list
 - **Communications** - channel tabs (All / Room / Global / Tells / Group) with
   server-side history on load
-- **Music** - a volume slider over the world's whole track list: click a title
-  to play it, tick the box beside it to put it in your playlist, with Repeat
-  and Shuffle under the list (the sound levels, the mode, next and stop are
-  `ui music` verbs)
+Sound is not a widget but a **Sound** menu in the header bar, beside Font Size
+and Theme: a volume slider with Mute next to it, Repeat and Shuffle, the
+world's whole track list (click a title to play it, tick the box beside it to
+put it in your playlist), and rows to play the playlist or clear it and hand
+the music back to the game. The button reads "Sound (Muted)" while muted. The
+four sound-effect levels stay on `ui music volume`.
+
 - **Connection Stats** - what this session costs on the wire: transport,
   compression, the bytes sent against the bytes that reached the socket, and
   the share saved. Closed by default; the gear menu at the top left opens it,
@@ -84,7 +87,9 @@ ui combat [<key> [on|off]]            hp ae balance enemy info
 ui music                              what is playing, your playlist, levels
 ui music repeat|shuffle [on|off]      playlist flags
 ui music mode server|playlist         who picks the track
+ui music mute [on|off]                silence the music and sound effects
 ui music next|stop                    skip a track, or stop the music
+ui music clear                        empty the playlist, game picks again
 ui music volume <name> <0-100>        music combat movement environment other
 ui connection                         what this session costs on the wire
 
@@ -134,11 +139,11 @@ integration contract (it only seeds tables at load time and MDW invokes it
 whenever its UI builds). Widget arrangement is yours after the first run: MDW
 persists your layout, and the default grouping never overrides it.
 
-**MDW 0.9.0 or newer is required, and this package installs it for you.**
+**MDW 0.9.2 or newer is required, and this package installs it for you.**
 Install the UI on its own and it fetches the MDW release it was built against,
 then builds the interface once MDW lands - Mudlet resolves no package
 dependencies itself. If that download cannot be made (no network, GitHub
-blocked) it declines to build and prints a single `needs MDW 0.9.0 or newer`
+blocked) it declines to build and prints a single `needs MDW 0.9.2 or newer`
 line on the main console with the URL, rather than half a UI. MDW is never
 downgraded: a newer one than the minimum is left alone.
 

@@ -174,6 +174,16 @@ check(mdw.widgets["PlayerJournal"] == nil,
   "a PlayerJournal restored from an older layout is destroyed on build")
 check(mdw.widgets["Affects"].stackId == "MDWUI_Status"
   and mdw.widgets["Keyring"].stackId == "MDWUI_Status", "Affects|Keyring grouped")
+-- The left dock's fresh-profile width is this package's, not MDW's 250. Only
+-- the SEED can be checked here: gameConfig merges during mdw.setup(), and this
+-- suite installs into an MDW that is already up (the mid-session path, which
+-- mdw.configure covers for the live-relevant keys only - a dock width is one a
+-- player owns, so it must never be re-applied over a loaded layout). The value
+-- landing is checked after `ui reset confirm`, which is the one fresh setup
+-- with no layout file; a saved width beating it, at "the sidebar width they
+-- set" in section 12f.
+check(mdw.gameConfig.leftDockWidth == 320,
+  "the left sidebar is seeded wider than MDW's default")
 check(mdw.widgets["Equipment"].stackId == "MDWUI_Items"
   and mdw.widgets["Inventory"].stackId == "MDWUI_Items"
   and mdw.widgets["Forage"].stackId == "MDWUI_Items", "Equipment|Inventory|Forage grouped")
@@ -234,6 +244,9 @@ gmcp = {
     Worth = { gold_carried = 1234, gold_bank = 56789, stat_points = 1, training_points = 2,
       xp_total = 45000, xp_current = 500, xp_tnl = 1500 },
     Affects = {
+      -- Aegis sorts alphabetically ahead of the permanent Regen, so the
+      -- permanent-first ordering is what decides the rows, not the names.
+      Aegis = { name = "Aegis", duration_max = 60, duration_current = 45, type = "buff" },
       Sanctuary = { name = "Sanctuary", duration_max = 300, duration_current = 120, type = "buff" },
       Regen = { name = "Regen", duration_max = -1, duration_current = -1, type = "buff" },
     },
@@ -539,7 +552,27 @@ mdw.closeAllMenus()
 raiseEvent("gmcp.Char.Affects")
 local affText = joined(mdw.widgets["Affects"])
 check(affText:find("Sanctuary") and affText:find("2:00"), "affects show with countdown")
-check(affText:find("Regen") and affText:find("perm"), "permanent affects marked")
+check(affText:find("Regen") and affText:find("Permanent"),
+  "a permanent affect says so in full, capitalised like the web client's")
+-- The web's .aff-row right-aligns the duration (text-align: right), so the
+-- column's right edge is the same whether the value is a clock or the word.
+do
+  local plainAff = affText:gsub("<[%d,]+>", ""):gsub("</?[biruso]>", "")
+  local lines, W = {}, mdwui.wrapWidth(mdw.widgets["Affects"], 24)
+  for line in plainAff:gmatch("[^\n]+") do lines[#lines + 1] = line end
+  check(#lines == 3 and #lines[1] == W and #lines[2] == W and #lines[3] == W,
+    "and every duration ends flush at the panel's right edge")
+  -- updateAffectsPanel's comparator: permanent first, then by name - so the
+  -- permanent Regen outranks Aegis, which sorts ahead of it alphabetically.
+  check(lines[1]:find("Regen", 1, true) == 1 and lines[2]:find("Aegis", 1, true) == 1
+    and lines[3]:find("Sanctuary", 1, true) == 1,
+    "permanent affects sort above the ticking ones, then by name")
+  -- .aff-permanent is the faint italic; a running clock takes .aff-duration's
+  -- parchment, which is unmarked.
+  check(affText:find("<" .. mdwui.config.colors.faint .. "><i>Permanent</i>", 1, true)
+    and affText:find("<" .. mdwui.config.colors.charHeader .. ">2:00", 1, true),
+    "a permanent duration is faint and italic, a running one parchment")
+end
 
 -- Equipment: the web client's sectioned panel (updateEquipSlot + the
 -- .eq-section markup) - gold slot labels, teal names with [C][E][Q] flags,
@@ -899,56 +932,103 @@ check(combat._rows["ae"] == nil, "AE gauge leaves when toggled off")
 mdw.closeAllMenus()
 
 -- 5b. Music (guide 5.16): the catalog and the settings are two packages, and
--- the widget is a pure repaint of both. Its LAYOUT is the web client's "Sound
--- & Music" panel - a bare master slider, the "Music" header, the hint, the
--- catalog with a playlist box per row, and Repeat/Shuffle under it - drawn in
--- this package's own palette, so an MDW theme still reaches it. It writes ONLY
--- through the silent Char.Audio.Set node - a click on a slider, a box or a
--- title must never put a `music` command in the player's main window.
+-- the Sound HEADER MENU is a pure read of both - its `items` is a function,
+-- so every open re-reads them. It is the web client's site-nav sound menu
+-- row for row (webclient.html's `.sound-menu`): slider, Mute, divider,
+-- catalog, Repeat/Shuffle. It writes ONLY through the silent Char.Audio.Set
+-- node - a slider drag or a box tick must never put a `music` command in the
+-- player's main window.
+--
+-- The catalog appears TWICE on purpose: a web track row has two controls
+-- (playlist checkbox, title plays) and an MDW menu row has one click, so
+-- there is a Playlist section and a Play now section.
 --
 -- Wrapped in a do block for the same reason the sections below it are not:
 -- Lua 5.1 allows 200 locals per chunk and this suite is one chunk, so a
 -- section with more than a couple of its own keeps them to itself.
 do
-local music = mdw.widgets["Music"]
---- Echoed cells carry their decho colour tag, so both readers take the tags
--- off first and match on the words.
-local function plainText()
-  return (joined(music):gsub("<[^>]*>", ""))
+local function menuDef()
+  for _, def in ipairs(mdw.gameHeaderMenus or {}) do
+    if def.id == "sound" then return def end
+  end
 end
-local function linkTexts()
+local function menuRows()
+  local def = menuDef()
+  return def and def.items() or {}
+end
+--- A SEGMENT of a parts row by its label - Volume/Mute and Repeat/Shuffle
+-- each share one row now, so those controls are not rows of their own.
+local function part(want)
+  for _, r in ipairs(menuRows()) do
+    for _, p in ipairs(r.parts or {}) do
+      local label = p.label
+      if type(label) == "function" then label = label() end
+      if label == want then return p end
+    end
+  end
+end
+--- A row by its label, getters resolved - the same read MDW's own render does.
+local function row(want)
+  for _, r in ipairs(menuRows()) do
+    local label = r.label
+    if type(label) == "function" then label = label() end
+    if label == want then return r end
+  end
+end
+local function labels()
   local out = {}
-  for i, link in ipairs(music.content._links) do
-    out[i] = (link.text:gsub("<[^>]*>", ""))
+  for _, r in ipairs(menuRows()) do
+    if r.separator then out[#out + 1] = "---"
+    elseif r.parts then
+      local seg = {}
+      for _, seg1 in ipairs(r.parts) do
+        local l = seg1.label
+        if type(l) == "function" then l = l() end
+        seg[#seg + 1] = (seg1.type == "slider") and "[slider]" or tostring(l)
+      end
+      out[#out + 1] = table.concat(seg, " + ")
+    elseif r.type == "slider" then out[#out + 1] = "[slider]"
+    else
+      local label = r.label
+      out[#out + 1] = (type(label) == "function") and label() or label
+    end
   end
   return out
-end
---- The nth link of the current paint. Re-read every time: the console's link
--- list is replaced by the clear() at the top of each render.
-local function link(n)
-  return music.content._links[n]
 end
 local function lastGmcp()
   return H.gmcpSent[#H.gmcpSent]
 end
 
-check(joined(music):find("No music has arrived", 1, true) ~= nil,
-  "the Music widget renders an empty state before either package lands")
+check(mdw.widgets["Music"] == nil,
+  "the Music widget is gone - the Sound menu is the one surface for this now")
+check(mdwui.widgetSynonyms.music == nil and mdwui.widgetSynonyms.playlist == nil,
+  "and its `ui` synonyms with it, so `ui show music` cannot name a dead widget")
+-- The catalog rides the login batch, so an early open sees none of it. A menu
+-- that currently lists nothing still has to say why.
+local heldCatalog = gmcp.Game.Music
+gmcp.Game.Music = nil
+check(row("No music has arrived yet") ~= nil and #menuRows() == 3,
+  "with no catalog the menu is the volume row, a rule and a line saying why")
+gmcp.Game.Music = heldCatalog
 raiseEvent("gmcp.Game.Music")
 -- Char.Audio - this character's own settings, pushed after every change -
--- lands a moment after the catalog here on purpose: a widget built before
--- either package must show something rather than error.
-check(plainText():find("[ ] Air\n[ ] Ballad\n[ ] Legend\n", 1, true) ~= nil,
-  "the catalog paints a checkbox and a title per track, in catalog order")
-check(plainText():find("[+]", 1, true) == nil and plainText():find("(playing)", 1, true) == nil,
-  "and nothing else - no ordinals, no [+] buttons, no now-playing word")
+-- lands a moment after the catalog here on purpose: a menu opened before
+-- either must show something rather than error.
+check(table.concat(labels(), "|")
+  == "Volume + [slider] + Mute|---|Repeat + Shuffle"
+    .. "|Click a title to play. Tick a box for the playlist."
+    .. "|Air|Ballad|Legend|---|Play playlist"
+    .. "|Clear playlist and let game control music",
+  "the card reads volume, the two flags, the catalog once, then the playlist ends")
 -- Before the first push there is no stored playlist and no stored flag to
 -- build a write from, so the boxes DRAW but do not click (the web swallows
--- that click too).
-check(table.concat(linkTexts(), "|") == "Air|Ballad|Legend",
-  "before Char.Audio only the titles are links - the boxes are not")
-check(plainText():find("[ ] Repeat   [ ] Shuffle", 1, true) ~= nil,
-  "Repeat and Shuffle draw under the list all the same")
+-- that click too). Playing a track needs neither, so it stays live.
+check(row("Air").keepOpen == true,
+  "picking a song leaves the menu open - a player picks a few things in a row")
+check(row("Air").checked() == false and row("Air").onCheck == nil
+  and row("Air").onClick ~= nil,
+  "before Char.Audio the playlist box draws but does not act - the title still plays")
+check(part("Repeat").onCheck == nil, "nor do Repeat and Shuffle")
 
 local gmcpBeforeAudio = #H.gmcpSent
 gmcp.Char.Audio = {
@@ -958,137 +1038,125 @@ gmcp.Char.Audio = {
   sound = true,
 }
 raiseEvent("gmcp.Char.Audio")
-check(#H.gmcpSent == gmcpBeforeAudio, "a repaint on its own writes nothing")
+check(#H.gmcpSent == gmcpBeforeAudio, "a push on its own writes nothing")
+check(row("Air  (playing)").checked() == true and row("Legend").checked() == false,
+  "the box ticks for what the server says is in the playlist")
+check(row("Air  (playing)") ~= nil, "and the label marks the track that is playing")
 
--- The row block is the panel's top: one unlabelled slider, the header and the
--- hint. The four sound-effect levels live on `ui music volume` - nothing in
--- this game plays through them, which is why the web panel hides its own.
-local rowIds = {}
-for i, row in ipairs(music._rowDefs) do rowIds[i] = row.id end
-check(table.concat(rowIds, "|") == "vol_music|hdr|hint"
-  and music._rows["now"] == nil and music._rows["vol_combat"] == nil,
-  "the rows are the master slider, the header and the hint, and nothing else")
-check(music._rows["vol_music"].type == "slider" and music._rows["vol_music"].el._value == 75
-  and music._rows["vol_music"].el.text._echoed[1] == "",
-  "the slider carries the music level and no label of its own")
-check(music._rows["vol_music"].front == mdwui.fillCss(mdwui.config.gauges.aeFill)
-  and music._rows["vol_music"].back == mdwui.trackCss(mdwui.config.gauges.aeTrack),
-  "drawn with the package's own gauge colours, not a palette of its own")
-check(music._rowDefs[2].text == string.format("<%s>Music", mdwui.config.colors.charLabel)
-  and music._rowDefs[2].fontSize == mdwui.config.gauges.headerFontSize
-  and music._rowDefs[2].height == mdwui.config.gauges.headerHeight
-  and music._rowDefs[3].text
-    == string.format("<%s>Click title to play. Check box to add to playlist.",
-      mdwui.config.colors.dim),
-  "the header is styled like the Combat widget's, and the hint says what to click")
--- The web hangs its settings off the panel itself, so there is no menu button
--- to hang them off here either.
-check(H.labels["MDW_Music_MenuBtn"] == nil, "the Music widget carries no menu button")
-
--- The playing track is marked by the package's own live colour and nothing
--- else: no background, no suffix, no second marker.
-check(joined(music):find("<" .. mdwui.config.colors.good .. ">Air", 1, true) ~= nil
-  and joined(music):find("<" .. mdwui.config.colors.link .. ">Ballad", 1, true) ~= nil,
-  "the playing title is C.good and every other title C.link")
-check(joined(music):find("<%d+,%d+,%d+:") == nil,
-  "and no cell carries a decho background at all - the console keeps MDW's")
-check(table.concat(linkTexts(), "|")
-    == "[x]|Air|[x]|Ballad|[ ]|Legend|[ ] Repeat|[ ] Shuffle",
-  "the push turns every box into a link and ticks the two tracks in the playlist")
-
--- An MDW without slider rows still shows the level (mdw.rowTypes is the
--- capability, and a plain gauge is the documented stand-in).
-local realRowTypes = mdw.rowTypes
-mdw.rowTypes = { text = true, gauge = true }
-mdwui.renderMusic()
-check(music._rows["vol_music"].type == "gauge" and music._rows["vol_music"].el._value == 75,
-  "an MDW without sliders falls back to a display-only gauge")
-mdw.rowTypes = realRowTypes
-mdwui.renderMusic()
-
--- Clicking a title plays it. GMCP only, and nothing on the command line.
-local sentBeforeMusic = #H.sent
-link(2).cb()
-check(lastGmcp() == 'Char.Audio.Set {"track":"air"}',
-  "clicking a title plays it through the silent write node")
-check(#H.sent == sentBeforeMusic, "and sends no game command at all")
--- Playlist edits are built from the list the server told us, never from an
--- empty local one: the field REPLACES the playlist.
-link(5).cb()
-check(lastGmcp() == 'Char.Audio.Set {"playlist":["air","ballad","legend"]}',
-  "an empty box sends the whole new playlist, the stored one plus this track")
-link(1).cb()
-check(lastGmcp() == 'Char.Audio.Set {"playlist":["ballad"]}',
-  "a ticked one sends the stored playlist without this track")
-link(7).cb()
-check(lastGmcp() == 'Char.Audio.Set {"repeat":true}', "Repeat flips the stored flag")
-link(8).cb()
-check(lastGmcp() == 'Char.Audio.Set {"shuffle":true}', "and Shuffle its own")
-gmcp.Char.Audio["repeat"] = true
+-- ONE row, TWO targets - the whole point of onCheck. The playlist write
+-- replaces the list whole, so a removal keeps the order of what is left and
+-- an addition goes on the end.
+row("Legend").onCheck()
+check(lastGmcp():find('"playlist":["air","ballad","legend"]', 1, true) ~= nil,
+  "ticking a box appends to the playlist, whole")
+gmcp.Char.Audio.playlist = { "air", "ballad", "legend" }
 raiseEvent("gmcp.Char.Audio")
-check(table.concat(linkTexts(), "|")
-    == "[x]|Air|[x]|Ballad|[ ]|Legend|[x] Repeat|[ ] Shuffle",
-  "the box ticks because the push says so, not because it was clicked")
-gmcp.Char.Audio["repeat"] = false
+row("Ballad").onCheck()
+check(lastGmcp():find('"playlist":["air","legend"]', 1, true) ~= nil,
+  "and unticking one removes it, keeping the order of the rest")
+gmcp.Char.Audio.playlist = { "air", "ballad", "legend" }
 raiseEvent("gmcp.Char.Audio")
+-- The same row's other target: the web's title click, a track id, which
+-- switches the character into playlist mode and starts it.
+row("Legend").onClick()
+check(lastGmcp():find('"track":"legend"', 1, true) ~= nil,
+  "and clicking the SAME row's title plays it instead")
 
--- A drag writes ONCE, on the release: a write per mouse move would answer
--- every pixel with a re-sent track. There is no label to follow the pointer,
--- so nothing is previewed either.
-local sliderName = music._rows["vol_music"].el.text.name
-local sliderWidth = music._rows["vol_music"].el.text:get_width()
-local gmcpBeforeDrag = #H.gmcpSent
-H.callbacks[sliderName].click({ x = sliderWidth * 0.2 })
-H.callbacks[sliderName].move({ x = sliderWidth * 0.4 })
-check(music._rows["vol_music"].el._value == 40 and #H.gmcpSent == gmcpBeforeDrag,
-  "a drag moves the bar under the pointer and writes nothing")
-H.callbacks[sliderName].release()
-check(lastGmcp() == 'Char.Audio.Set {"music_volume":40}',
-  "the release commits the music level once")
--- The push is the answer to every write, and it takes the bar back.
-raiseEvent("gmcp.Char.Audio")
-check(music._rows["vol_music"].el._value == 75,
-  "and the Char.Audio push repaints the stored level over it")
+-- Repeat and Shuffle share ONE row above the list: they describe how the
+-- songs below are played, so they lead rather than trail them.
+part("Repeat").onCheck()
+check(lastGmcp():find('"repeat":true', 1, true) ~= nil, "Repeat writes the flag")
+part("Shuffle").onCheck()
+check(lastGmcp():find('"shuffle":true', 1, true) ~= nil, "and Shuffle its own")
 
--- Track-end relay: a playlist track plays once, and the client reporting the
--- end is what advances the playlist. Everything else Mudlet finishes playing
--- must be ignored - sound effects share the event.
-local gmcpBeforeEnd = #H.gmcpSent
-raiseEvent("sysMediaFinished", "Air.mp3", "media/", "music")
-check(lastGmcp() == 'Char.Audio.Set {"next":true}' and #H.gmcpSent == gmcpBeforeEnd + 1,
-  "the playing track ending asks the server for the next one, once")
-gmcpBeforeEnd = #H.gmcpSent
-raiseEvent("sysMediaFinished", "Ballad.mp3", "media/", "music")
-raiseEvent("sysMediaFinished", "Air.mp3", "media/", "sound")
-check(#H.gmcpSent == gmcpBeforeEnd,
-  "another file, or a sound effect, advances nothing")
-gmcp.Char.Audio.mode = "server"
-raiseEvent("gmcp.Char.Audio")
-gmcpBeforeEnd = #H.gmcpSent
-raiseEvent("sysMediaFinished", "Air.mp3", "media/", "music")
-check(#H.gmcpSent == gmcpBeforeEnd,
-  "and a looping track in server mode needs no relay")
+-- The two ends of the playlist, at the foot of the card.
+row("Play playlist").onClick()
+check(lastGmcp() == 'Char.Audio.Set {"mode":"playlist"}',
+  "Play playlist hands the choosing to the list")
+row("Clear playlist and let game control music").onClick()
+-- Field order is AUDIO_FIELDS', not the order the call listed them: one body,
+-- so the server never sees a cleared list under playlist mode.
+check(lastGmcp() == 'Char.Audio.Set {"mode":"server","playlist":[]}',
+  "and clearing it hands the choosing back to the game, in one write")
+gmcp.Char.Audio.playlist = { "air", "ballad", "legend" }
 gmcp.Char.Audio.mode = "playlist"
-
--- The sound toggle is the one affordance here that IS a typed command, since
--- the server sends no MSP at all while it is off.
-gmcp.Char.Audio.sound = false
-raiseEvent("gmcp.Char.Audio")
-check(joined(music):find("Sound is off", 1, true) ~= nil
-  and #linkTexts() == 9 and linkTexts()[1] == "config sound on",
-  "sound off is said, with the command that turns it back on")
-gmcp.Char.Audio.sound = true
 raiseEvent("gmcp.Char.Audio")
 
--- Widget affordances are MOUSE gestures: the command they stand for must not
--- be echoed into the main window as if the player had typed it. Every
--- console link in the package goes out through mdwui.link, so one check here
--- covers the item, quest and journal lists too.
+-- The box ticks because the SERVER said so, so the click that writes redraws
+-- stale - the push is still in flight. Re-declaring on that push is what
+-- repaints the open card, and without it a tick appears one click late and
+-- reads as landing on the wrong row. Checked against the rendered label, not
+-- the row table: the row table was never the thing that went stale.
+if mdw.addHeaderMenu then
+  gmcp.Char.Audio.playlist = { "air" }
+  raiseEvent("gmcp.Char.Audio")
+  mdw.toggleMenu("gameMenu_sound")
+  -- Found by TEXT, not by index: the card's shape is the thing under design
+  -- here, and a row moving is not what these two checks are about.
+  local function trackLabelName(title)
+    for n = 1, 16 do
+      local name = "MDW_GameMenu_sound_Item" .. n
+      local l = H.labels[name]
+      local drawn = l and l._echoed[#l._echoed] or ""
+      if drawn:find(title, 1, true) then return name end
+    end
+  end
+  local function drawn(name)
+    local l = name and H.labels[name]
+    return l and l._echoed[#l._echoed] or ""
+  end
+  local airRow, balladRow = trackLabelName("Air"), trackLabelName("Ballad")
+  check(drawn(airRow):find("[x] ", 1, true) and drawn(balladRow):find("[ ] ", 1, true),
+    "the open menu draws the playlist the server last confirmed")
+  -- The server's answer to a tick, arriving while the card is still open.
+  gmcp.Char.Audio.playlist = { "air", "ballad" }
+  raiseEvent("gmcp.Char.Audio")
+  -- Refreshed IN PLACE: the rows re-read their own getters and re-echo, so no
+  -- label is created or destroyed. That is what makes it safe from inside a
+  -- row's own click - a rebuild there deletes the label being clicked.
+  local labelBefore = H.labels[balladRow]
+  check(drawn(balladRow):find("[x] ", 1, true) ~= nil and mdw.menus["gameMenu_sound"]
+    and H.labels[balladRow] == labelBefore,
+    "and a Char.Audio push refreshes it in place, without closing or rebuilding it")
+  mdw.closeAllMenus()
+  gmcp.Char.Audio.playlist = { "air", "ballad", "legend" }
+  raiseEvent("gmcp.Char.Audio")
+end
+
+-- The slider is the web's, and its commit is mdwui.setMusicVolume - the same
+-- call `ui music volume music` makes.
+-- "Volume [====] [ ] Mute" is one row: the bar is its middle segment, and it
+-- flexes to whatever the two fixed ends leave.
+local slider = menuRows()[1].parts[2]
+check(slider.type == "slider" and slider.flex and slider.value == 75
+  and slider.max == 100 and slider.step == 5,
+  "the volume row's middle segment is the slider, opened at the stored level")
+check(menuRows()[1].parts[1].label == "Volume"
+  and menuRows()[1].parts[3].label == "Mute",
+  "with the word before it and Mute after it, on that same row")
+slider.onChange(40)
+check(lastGmcp():find('"music_volume":40', 1, true) ~= nil,
+  "a drag commits the level through the silent write node")
+check(H.sent[#H.sent] ~= "music volume music 40",
+  "and never as a typed command in the main window")
+
+-- Raising the volume off zero is a request to hear something (the web's
+-- changeWebclientVolume does exactly this).
+H.config.muteMediaGame = true
+menuRows()[1].parts[2].onChange(60)
+check(H.config.muteMediaGame == false,
+  "moving the slider up off zero unmutes, like the web slider")
+
+-- Sound off is a server-side switch: no MSP arrives at all while it is off,
+-- whatever the rest of the payload says, so the menu says so under the
+-- controls that will not be heard.
 gmcp.Char.Audio.sound = false
 raiseEvent("gmcp.Char.Audio")
-link(1).cb()
+local offRow = row("Sound is off - click to turn it on")
+check(offRow ~= nil, "sound off is said, under the rows it silences")
+offRow.onClick()
 check(H.sent[#H.sent] == "config sound on" and H.sentEcho[#H.sentEcho] == false,
-  "mdwui.link sends its command silently")
+  "and that one IS a real typed command, sent silently")
 gmcp.Char.Audio.sound = true
 raiseEvent("gmcp.Char.Audio")
 end
@@ -1184,10 +1252,22 @@ for _, row in ipairs(mdw.gameMenu or {}) do
   if row.id == "connection" then gearRow = row end
 end
 check(gearRow ~= nil, "a gear-menu row is declared for the panel")
-check(gearRow.checked() == false, "its checkbox reads the panel's live visibility")
+-- A label getter, not a checkbox: MDW resolves it on every gear open, so the
+-- wording follows the panel however it was closed. mdw.menuItems() is what
+-- the dropdown renders from, so read the row through that rather than the
+-- declaration - a row with no `checked` must come back with none.
+local function gearLabel()
+  for _, row in ipairs(mdw.menuItems()) do
+    if row.id == "connection" then return row.label, row.checked end
+  end
+end
+local label, box = gearLabel()
+check(label == "Show connection stats" and box == nil,
+  "it offers to show the closed panel, with no checkbox")
 local beforeOpen = connRequests()
 gearRow.onClick()
-check(mdw.isWidgetShown(conn) and gearRow.checked() == true, "clicking it reveals the panel")
+check(mdw.isWidgetShown(conn) and gearLabel() == "Hide connection stats",
+  "clicking it reveals the panel, and the row now offers to hide it")
 -- ...where it was left, not re-centred. This is what makes the corner a
 -- first-run DEFAULT rather than a rule the package re-imposes: mdw.showWidget
 -- shows a hidden float without moving it, so a player who drags this panel
@@ -1200,6 +1280,18 @@ check(mdw.widgets[conn.stackId].container:get_x()
   "reopening leaves it where it was rather than re-centring it")
 check(connRequests() == beforeOpen + 1,
   "and asks at once - a pull-only node has nothing cached to paint")
+-- Closed by the panel's own X rather than by the row: the tab close runs
+-- mdw.closeStackMember, which for a sole member is mdw.hideStack. The label
+-- has to follow that too, which is the whole reason it is a getter and not a
+-- string this package would have to remember to update.
+do
+  local stack = mdw.widgets[conn.stackId]
+  mdw.closeStackMember(stack, "Connection")
+  check(not mdw.isWidgetShown(conn) and gearLabel() == "Show connection stats",
+    "closing the panel by its own X puts the row back to offering to show it")
+  gearRow.onClick()
+  check(mdw.isWidgetShown(conn), "and the row reopens it again")
+end
 
 local shownBefore = connRequests()
 mdwui.startConnectionPoll()
@@ -1982,7 +2074,7 @@ check(mdw.visibility.promptBar == false, "ui prompt bar hides the bar itself")
 uiRun("prompt bar on")
 check(mdw.visibility.promptBar == true, "and brings it back")
 
--- ui music writes through the same silent node the widget does (guide 5.16),
+-- ui music writes through the same silent node the Sound menu does (guide 5.16),
 -- so the keyboard and the mouse cannot describe the audio differently - and
 -- the keyboard surface still speaks, since the player typed a question.
 -- Its own do block, like section 5b: 200 locals per chunk.
@@ -2004,8 +2096,49 @@ uiRun("music mode server")
 check(lastGmcp() == 'Char.Audio.Set {"mode":"server"}', "ui music mode switches who picks")
 uiRun("music next")
 check(lastGmcp() == 'Char.Audio.Set {"next":true}', "ui music next skips a track")
+-- The track-end relay is the OTHER way next is sent, and it names the file.
+-- Mudlet raises sysMediaFinished for a track it stopped as well as one that
+-- ran out, and every track switch stops the old one first, so without the
+-- name the server reads a switch as an end and jumps the playlist.
+mdwui.onMediaFinished("sysMediaFinished", "Air.mp3", "/x/Air.mp3", "music")
+check(lastGmcp() == 'Char.Audio.Set {"next":true,"ended":"Air.mp3"}',
+  "a finished track relays next with the file it was")
+-- Every music end goes out, not only a playlist one. The login intro plays in
+-- server mode and is not in Char.Audio at all, and its end is what starts the
+-- player's own music - a relay that checked the mode or the current track
+-- would swallow it and leave the player silent after login.
+do
+  local mode = gmcp.Char.Audio.mode
+  gmcp.Char.Audio.mode = "server"
+  mdwui.onMediaFinished("sysMediaFinished", "Peaceful.mp3", "/x/Peaceful.mp3", "music")
+  check(lastGmcp() == 'Char.Audio.Set {"next":true,"ended":"Peaceful.mp3"}',
+    "a music end in server mode is relayed too, so the intro can hand over")
+  gmcp.Char.Audio.mode = mode
+end
+-- A sound effect is not music and never relays: the server would read it as
+-- the current track ending.
+do
+  local beforeSound = #H.gmcpSent
+  mdwui.onMediaFinished("sysMediaFinished", "Hit.mp3", "/x/Hit.mp3", "sound")
+  check(#H.gmcpSent == beforeSound, "a sound effect finishing relays nothing")
+end
 uiRun("music stop")
 check(lastGmcp() == 'Char.Audio.Set {"track":""}', "ui music stop empties the track")
+-- Every player-facing toggle gets a `ui` verb (CLAUDE.md), and the Sound
+-- menu's Mute is one. It is Mudlet's own client-side switch, so it writes no
+-- GMCP - the stored volume levels have to survive it.
+local gmcpBeforeMute = #H.gmcpSent
+H.config.muteMediaGame = false
+check(uiRun("music mute on"):find("muted", 1, true) ~= nil
+  and H.config.muteMediaGame == true and #H.gmcpSent == gmcpBeforeMute,
+  "ui music mute on silences the game without touching the volumes")
+check(uiRun("music mute"):find("unmuted", 1, true) ~= nil
+  and H.config.muteMediaGame == false,
+  "and a bare ui music mute toggles what is stored, like the other flags")
+-- The Sound menu's other new row, so the keyboard can reach it too.
+uiRun("music clear")
+check(lastGmcp() == 'Char.Audio.Set {"mode":"server","playlist":[]}',
+  "ui music clear empties the playlist and hands the choosing back, in one write")
 uiRun("music volume music 20")
 check(lastGmcp() == 'Char.Audio.Set {"music_volume":20}', "the music level has its own field")
 uiRun("mus vol c 40")
@@ -2134,10 +2267,15 @@ check(uiRun("reset"):find("ui reset confirm", 1, true) ~= nil, "ui reset arms an
 check(mdw.config.leftDockWidth == widthBeforeReset, "arming changes nothing")
 uiRun("reset confirm")
 H.flushTimers()
-check(mdw.config.leftDockWidth == mdw.layoutDefaults.leftDockWidth
+-- The dock width lands on THIS package's seed, not MDW's 250: resetLayout
+-- restores mdw.layoutDefaults and then re-runs setup(), which re-merges
+-- gameConfig over it - a game's chosen width is a default, like its theme.
+check(mdw.config.leftDockWidth == 320
+  and mdw.config.leftDockWidth == mdw.gameConfig.leftDockWidth
+  and mdw.config.leftDockWidth ~= mdw.layoutDefaults.leftDockWidth
   and mdw.config.theme == mdw.layoutDefaults.theme
   and mdw.visibility.leftSidebar and mdw.visibility.rightSidebar and mdw.visibility.promptBar,
-  "ui reset confirm restores the factory layout")
+  "ui reset confirm restores the factory layout, our own dock width included")
 check(mdw.widgets["Combat"] ~= nil and mdw.widgets["Comm"].tabsByName["Global"] ~= nil
   and mdw.widgets["Character"].stackId == "MDWUI_Char", "and rebuilds our widgets and groups")
 check(mdw.gameSettings[mdwui.packageName].promptBar.enemy == true,
@@ -3159,6 +3297,9 @@ check(H.labels["MDW_Combat_Row_hp_back"] == nil and H.labels["MDW_Combat_MenuBtn
 -- and it is full. Ours is the only package declaring a row here, so the count
 -- IS the answer.
 check(#(mdw.gameMenu or {}) == 0, "our gear-menu row withdrawn on uninstall")
+-- Same reason, same table's sibling: mdw.gameHeaderMenus survives a teardown,
+-- so a Sound button left in the header would outlive the package.
+check(#(mdw.gameHeaderMenus or {}) == 0, "and the Sound header menu with it")
 check(mdw.isSetUp, "MDW itself unaffected")
 
 print("\nSMOKE PASSED")

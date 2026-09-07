@@ -83,7 +83,18 @@ function Element:hide(auto)
   for _, v in pairs(self.windowList) do v:hide(true) end
 end
 function Element:raise() end
-function Element:setStyleSheet(css) self._css = css end
+-- Mudlet's setLabelStyleSheet REFUSES a nil ("bad argument #2 type
+-- (stylesheet as string expected, got nil!)"), and Geyser.Gauge:setStyleSheet
+-- hands front and back straight to it - so styling only a gauge's text label
+-- through the gauge passes nils the real client throws on. Modelled here
+-- because this stub accepting them let exactly that ship twice.
+function Element:setStyleSheet(css)
+  if type(css) ~= "string" then
+    error("setLabelStyleSheet: bad argument #2 type (stylesheet as string expected, got "
+      .. type(css) .. "!)", 2)
+  end
+  self._css = css
+end
 function Element:setFontSize() end
 function Element:setFont() end
 function Element:setAlignment(a) self._align = a end
@@ -93,7 +104,18 @@ function Element:setCursor() end
 function Element:setToolTip() end
 function Element:setBackgroundImage() end
 function Element:setClickCallback(cb) self._click = cb end
-function Element:echo(t) self._echoed[#self._echoed + 1] = t end
+-- Echoing into a DELETED label is what Mudlet dies on: getLabelStyleSheet
+-- answers nil for a label that does not exist ("label '%s' does not exist"),
+-- and getLabelFormat indexes that answer. Rebuilding a menu from inside one
+-- of its own labels' click callbacks did exactly this, and the stub let it
+-- through because a deleted Element still accepted echoes.
+function Element:echo(t)
+  if self._deleted then
+    error("attempt to index local 'stylesheet' (a nil value) - echo into deleted label "
+      .. tostring(self.name), 2)
+  end
+  self._echoed[#self._echoed + 1] = t
+end
 Element.cecho, Element.decho, Element.hecho = Element.echo, Element.echo, Element.echo
 function Element:clear()
   self._echoed = {}
@@ -204,7 +226,11 @@ function setBorderBottom() end
 function setBackgroundColor() end
 function setBgColor() end
 function setFgColor() end
-function deleteLabel(name) H.labels[name] = nil end
+function deleteLabel(name)
+  local el = H.labels[name]
+  if el then el._deleted = true end
+  H.labels[name] = nil
+end
 function enableClickthrough() end
 function enableTrigger() end
 function disableTrigger() end
@@ -248,6 +274,19 @@ function send(cmd, echo)
   H.sentEcho[#H.sentEcho + 1] = echo
 end
 function sendGMCP(pkg, payload) H.gmcpSent[#H.gmcpSent + 1] = pkg .. " " .. (payload or "") end
+
+-- Mudlet's client-side settings. Only the keys a test sets exist, so an
+-- unknown one throws exactly as the real getConfig does - which is what the
+-- pcall around mdwui.soundMuted is there to survive.
+H.config = {}
+function setConfig(key, value)
+  H.config[key] = value
+  return true
+end
+function getConfig(key)
+  if H.config[key] == nil then error("unknown config option: " .. tostring(key), 2) end
+  return H.config[key]
+end
 function ansi2decho(s) return s end
 
 -- Mudlet's JSON decoder (LuaGlobal.lua aliases yajl.to_value). Enough of a
