@@ -30,6 +30,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.5.2 - 2026-09-07
+
 ### Added
 - A "Sound" menu in the header bar, next to Font Size and Theme - the web
   client's own sound menu: a volume slider you drag with Mute beside it,
