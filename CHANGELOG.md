@@ -30,6 +30,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.5.3 - 2026-09-10
+
 ### Added
 - A `Stop the music` row in the Sound menu, and `ui music stop` from the keyboard.
 
