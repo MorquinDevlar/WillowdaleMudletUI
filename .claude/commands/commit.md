@@ -40,6 +40,7 @@ Verify these are complete before running `git commit`:
 - [ ] Verify: smoke suite and luacheck passed (and muddle, when `src/` or `mfile` changed)
 - [ ] Smoke coverage: new widget / `ui` verb / toggle has a check
 - [ ] Changelog: internal-only -> no entry; player-facing -> asked, entry approved and written if wanted
+- [ ] Changelog: bullets are one sentence each, section is 6 bullets or fewer
 - [ ] Docs: asked when README-documented behaviour changed
 - [ ] Version: NOT bumped
 - [ ] Staging: `CHANGELOG.md` included if it was modified, `build/` never
@@ -65,9 +66,21 @@ Two rules. First: entries land under `## Unreleased` in `CHANGELOG.md` in the sa
 1. Classify the changed files with the paths above plus your judgment.
 2. Internal-only change: state that no changelog entry is added (the changelog is player-facing only) and continue with the next step. Otherwise use **AskUserQuestion**: "Add a CHANGELOG entry under Unreleased?" with options Yes/No, stating what looks player-facing.
 3. If yes, draft the entry (do NOT write it yet):
-   - One bullet per change under `### Added`, `### Changed`, `### Fixed`, or `### Removed` inside `## Unreleased`; create a subsection if missing and keep that order
+   - One bullet per change under `### Added`, `### Changed`, `### Fixed`, or
+     `### Removed` inside `## Unreleased`; create a subsection if missing and
+     keep that order
+   - **One sentence per bullet, 20 words or fewer.** A bullet that needs a
+     second sentence is either two changes or too much detail: split it or cut
+     it. No sub-bullets, no parentheticals carrying a second thought
+   - **At most 6 bullets for the whole `## Unreleased` section.** Merge related
+     changes into one line; drop anything a player would not notice. If a
+     change genuinely needs more than 6, say so and get that agreed
+   - State the fact only. No mechanism, no rationale, no history of the bug, no
+     comparison with the web client, no reassurance about what is unaffected,
+     no MDW version caveats - a player who wants the why reads the code
    - Never add dates or version numbers - the release script does that
-   - Name the widget, the `ui` verb, or the key in backticks; describe what the player sees, not how it is implemented
+   - Name the widget, the `ui` verb, or the key in backticks; describe what the
+     player sees, not how it is implemented
    - No `mdwui.*` internals: a player cannot call them
 4. **Get the draft approved.** Show the complete draft in your response text, then use **AskUserQuestion**: "Use this changelog entry?" with options:
    - **Yes**: proceed
@@ -77,7 +90,13 @@ Two rules. First: entries land under `## Unreleased` in `CHANGELOG.md` in the sa
 **Example lines:**
 
 - Good: "`ui height <widget>` accepts `+n` and `-n` as well as an absolute pixel value."
-- Good: "The Affects countdowns keep ticking between GMCP updates instead of freezing at the last received value."
+- Good: "A `Sound` menu in the header bar: volume, mute, repeat, shuffle, and the music catalog."
+- Good: "Picking a track while another played stopped the music instead of switching."
+- Good: "Removed the Music widget - the Sound menu replaces it."
+- Bad: a bullet that explains how the fix works, why the old behaviour happened,
+  or what the web client does
+- Bad: a bullet that reassures ("your volume levels are untouched", "the rest of
+  the UI is unaffected")
 - Bad: "Refactored renderAffects" (implementation, not behaviour)
 - Bad: "Various fixes" (too vague)
 - Bad: "Added a smoke check for the numpad folder" (tests - never in the changelog)

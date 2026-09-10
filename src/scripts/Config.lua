@@ -87,7 +87,18 @@ mdwui.version = "0.5.2"
 -- floatMargin, and the panel ends up sitting over the sidebar - which is the
 -- first-run default this package sets, so again a fix to require rather than
 -- hope for.
-mdwui.minMdwVersion = "0.9.3"
+--
+-- 0.9.4 is the fourth of that same lineage and the mildest of them: it is NOT
+-- an API adoption, and floatSnapInset is unchanged, so the Connection panel's
+-- first-run corner is identical to what 0.9.3 produced. What it changes is
+-- what happens once a player MOVES a float - snapped floats join and travel
+-- together, a resize snaps its dragged border to its neighbours and the area
+-- edges, and floatSnapGap became inset + border so a column of snapped panels
+-- is spaced like the gap above the first one. Pinned rather than left to
+-- chance for the reason 0.9.1 gives: MDW never updates itself, so a behavior
+-- this package does not require is one no player ever gets, and the
+-- Connection panel is the only float this package creates.
+mdwui.minMdwVersion = "0.9.4"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter

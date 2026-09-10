@@ -246,9 +246,15 @@ state on every build. Rule: every new widget or player-facing toggle gets a
 
 The `Sound` HEADER menu is the other half of that split, and the rule between
 them: a gear row is one action, a header menu is a SET of choices. It is the
-web client's site-nav sound menu row for row - slider, Mute, divider, catalog,
+web client's site-nav sound menu - slider, Mute, divider, catalog,
 Repeat/Shuffle - and it REPLACED a Music widget that drew the same panel: one
-surface for sound, in the place the web client puts it. The widget is retired
+surface for sound, in the place the web client puts it. The ONE row the web has
+no equivalent of is Stop (`{"track":""}`), and it sits ABOVE the divider with
+the volume and Mute rather than at the foot of the card: it acts on whatever is
+playing, the login intro that plays before either payload lands included, so it
+must not sit behind a scroll of songs - the same argument that puts Repeat and
+Shuffle over the list. Mute is not a substitute for it: it takes the sound
+effects with it and leaves the track running underneath. The widget is retired
 on sight in `buildUI`, beside `PlayerJournal`, because a saved layout still
 restores it. A track row carries the web's two controls on ONE row - the box
 adds to the playlist, the title plays - via MDW's `onCheck`, which was added

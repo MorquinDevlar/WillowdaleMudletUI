@@ -934,8 +934,9 @@ mdw.closeAllMenus()
 -- 5b. Music (guide 5.16): the catalog and the settings are two packages, and
 -- the Sound HEADER MENU is a pure read of both - its `items` is a function,
 -- so every open re-reads them. It is the web client's site-nav sound menu
--- row for row (webclient.html's `.sound-menu`): slider, Mute, divider,
--- catalog, Repeat/Shuffle. It writes ONLY through the silent Char.Audio.Set
+-- (webclient.html's `.sound-menu`): slider, Mute, divider, catalog,
+-- Repeat/Shuffle, plus a Stop row the web has no equivalent of. It writes
+-- ONLY through the silent Char.Audio.Set
 -- node - a slider drag or a box tick must never put a `music` command in the
 -- player's main window.
 --
@@ -1007,19 +1008,23 @@ check(mdwui.widgetSynonyms.music == nil and mdwui.widgetSynonyms.playlist == nil
 -- that currently lists nothing still has to say why.
 local heldCatalog = gmcp.Game.Music
 gmcp.Game.Music = nil
-check(row("No music has arrived yet") ~= nil and #menuRows() == 3,
-  "with no catalog the menu is the volume row, a rule and a line saying why")
+check(row("No music has arrived yet") ~= nil and #menuRows() == 4,
+  "with no catalog the menu is the volume row, Stop, a rule and a line saying why")
+-- Stop lives above the divider for this reason: the login intro plays before
+-- either package has landed, and stopping it must not wait for a catalog.
+check(row("Stop the music") ~= nil,
+  "and Stop is there before the catalog is - it needs neither payload")
 gmcp.Game.Music = heldCatalog
 raiseEvent("gmcp.Game.Music")
 -- Char.Audio - this character's own settings, pushed after every change -
 -- lands a moment after the catalog here on purpose: a menu opened before
 -- either must show something rather than error.
 check(table.concat(labels(), "|")
-  == "Volume + [slider] + Mute|---|Repeat + Shuffle"
+  == "Volume + [slider] + Mute|Stop the music|---|Repeat + Shuffle"
     .. "|Click a title to play. Tick a box for the playlist."
     .. "|Air|Ballad|Legend|---|Play playlist"
     .. "|Clear playlist and let game control music",
-  "the card reads volume, the two flags, the catalog once, then the playlist ends")
+  "the card reads volume, Stop, the two flags, the catalog once, then the playlist ends")
 -- Before the first push there is no stored playlist and no stored flag to
 -- build a write from, so the boxes DRAW but do not click (the web swallows
 -- that click too). Playing a track needs neither, so it stays live.
@@ -1068,6 +1073,19 @@ part("Repeat").onCheck()
 check(lastGmcp():find('"repeat":true', 1, true) ~= nil, "Repeat writes the flag")
 part("Shuffle").onCheck()
 check(lastGmcp():find('"shuffle":true', 1, true) ~= nil, "and Shuffle its own")
+
+-- Mute silences the sound effects with the music and leaves the track
+-- playing underneath; Stop is the other one. An empty track stops it and
+-- hands the choosing back to the world (guide 5.16) - no mode field of its
+-- own, because the server does that half.
+local mutedBeforeStop = mdwui.soundMuted()
+row("Stop the music").onClick()
+check(lastGmcp() == 'Char.Audio.Set {"track":""}',
+  "Stop empties the track, the same write ui music stop makes")
+check(row("Stop the music").keepOpen == true,
+  "and leaves the card open, like every other control on it")
+check(mdwui.soundMuted() == mutedBeforeStop,
+  "stopping is not muting - it leaves the client-side switch alone")
 
 -- The two ends of the playlist, at the foot of the card.
 row("Play playlist").onClick()

@@ -9,6 +9,10 @@
   WIDGET rendering the same panel and it is gone - one surface for this, not
   two, and the menu is where the web client puts it.
 
+  One row is ours rather than the web's: Stop, under the slider. The web menu
+  has none, and mute is not one - it silences the sound effects too and leaves
+  the track playing underneath it.
+
   A web track row carries two controls - a checkbox for the playlist, a title
   that plays - and so does this one: MDW menu rows take `onCheck` for the box
   and `onClick` for the rest of the row. That capability was added for this
@@ -312,6 +316,19 @@ local function soundMenuItems()
     { label = "Mute", checked = mdwui.soundMuted,
       onCheck = function() mdwui.toggleSoundMute() end },
   } })
+  -- Mute was the only way to shut the music up, and it silences the sound
+  -- effects with it. This is the other one: an empty `track` stops the music
+  -- and hands the choosing back to the world (guide 5.16), which is what
+  -- `music stop` and `ui music stop` both write.
+  --
+  -- ABOVE the divider, in the master-audio group rather than with the playlist
+  -- ends at the foot of the card: it acts on whatever is playing, including
+  -- the login intro that plays before the catalog has arrived, so it must not
+  -- sit behind a scroll of songs - the same argument that puts Repeat and
+  -- Shuffle over the list. Not gated on Char.Audio either: the write is built
+  -- from nothing the server has to have told us first.
+  add({ label = "Stop the music", keepOpen = true,
+    onClick = function() mdwui.audioSet({ track = "" }) end })
   add({ separator = true })
 
   local tracks = mdwui.tbl(catalog().tracks)

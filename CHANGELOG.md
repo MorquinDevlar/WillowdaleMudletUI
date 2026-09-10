@@ -30,6 +30,12 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Added
+- A `Stop the music` row in the Sound menu, and `ui music stop` from the keyboard.
+
+### Changed
+- Floating panels snapped together move as one, and a dragged float border snaps to its neighbours.
+
 ### Fixed
 - Map symbols such as the garden florette and tundra snowflake showed as a
   missing-glyph box in the mapper.

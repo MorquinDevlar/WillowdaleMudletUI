@@ -29,11 +29,12 @@ Left dock                      Center            Right dock
 - **Communications** - channel tabs (All / Room / Global / Tells / Group) with
   server-side history on load
 Sound is not a widget but a **Sound** menu in the header bar, beside Font Size
-and Theme: a volume slider with Mute next to it, Repeat and Shuffle, the
-world's whole track list (click a title to play it, tick the box beside it to
-put it in your playlist), and rows to play the playlist or clear it and hand
-the music back to the game. The button reads "Sound (Muted)" while muted. The
-four sound-effect levels stay on `ui music volume`.
+and Theme: a volume slider with Mute next to it, a row that stops the music
+outright, Repeat and Shuffle, the world's whole track list (click a title to
+play it, tick the box beside it to put it in your playlist), and rows to play
+the playlist or clear it and hand the music back to the game. The button
+reads "Sound (Muted)" while muted. The four sound-effect levels stay on
+`ui music volume`.
 
 - **Connection Stats** - what this session costs on the wire: transport,
   compression, the bytes sent against the bytes that reached the socket, and
@@ -139,11 +140,11 @@ integration contract (it only seeds tables at load time and MDW invokes it
 whenever its UI builds). Widget arrangement is yours after the first run: MDW
 persists your layout, and the default grouping never overrides it.
 
-**MDW 0.9.3 or newer is required, and this package installs it for you.**
+**MDW 0.9.4 or newer is required, and this package installs it for you.**
 Install the UI on its own and it fetches the MDW release it was built against,
 then builds the interface once MDW lands - Mudlet resolves no package
 dependencies itself. If that download cannot be made (no network, GitHub
-blocked) it declines to build and prints a single `needs MDW 0.9.3 or newer`
+blocked) it declines to build and prints a single `needs MDW 0.9.4 or newer`
 line on the main console with the URL, rather than half a UI. MDW is never
 downgraded: a newer one than the minimum is left alone.
 
