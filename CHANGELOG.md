@@ -30,6 +30,10 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Fixed
+- Map symbols such as the garden florette and tundra snowflake showed as a
+  missing-glyph box in the mapper.
+
 ## 0.5.2 - 2026-09-07
 
 ### Added

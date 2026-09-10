@@ -402,9 +402,15 @@ mdw.gameConfig.uiName = "WillowdaleUI"
 -- in, so a player moving between them sees one face. The bundled build is the
 -- web side's own: no ligature features (its GSUB carries only ccmp and locl,
 -- so "->" stays two characters) and the full box-drawing range the tinymap
--- needs. It is a SUBSET though - any glyph outside it, like U+2228, is
--- silently drawn from another family at another width, so check a character
--- is in the font before printing it.
+-- needs. Across the symbol ranges - arrows, math, misc technical, box
+-- drawing, block elements, geometric shapes, misc symbols, dingbats - the
+-- symbols the game's content and map code actually print that Fira Code lacks
+-- are merged from JuliaMono, and nothing more, so it is still a SUBSET: a
+-- glyph outside it, like U+2228, is silently drawn from another family at
+-- another width, so keep checking a character is in the font before printing
+-- it - letters and anything outside subset-ranges.txt especially. A new
+-- symbol in content needs a rebuild in the server repo, where that range list
+-- and the build, scripts/build-fonts.py, live, and a package release here.
 --
 -- Renamed from plain "Fira Code" because Mudlet registers a package font
 -- with QFontDatabase::addApplicationFont, which does not disambiguate two
