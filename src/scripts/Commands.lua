@@ -337,7 +337,7 @@ end
 ---------------------------------------------------------------------------
 
 local PROMPT_KEYS = { "vitals", "worth", "hp", "ae", "balance", "enemy" }
-local COMBAT_KEYS = { "hp", "ae", "balance", "enemy", "info" }
+local COMBAT_KEYS = { "hp", "ae", "balance", "companion", "enemy", "info" }
 -- `ui music`: the settings, then the two actions, then the levels. Each one
 -- writes through Char.Audio.Set (guide 5.16), the same silent node the widget
 -- uses, so the keyboard and the mouse cannot describe the audio differently.
@@ -1061,7 +1061,8 @@ COMMANDS = {
 
   { name = "combat",
     usage = "ui combat [<key> [on|off]]",
-    help = "Combat widget sections: hp ae balance enemy info (info is the enemy name list).",
+    help = "Combat widget sections: hp ae balance companion enemy info (info is the enemy "
+      .. "name list, companion your spirit beast's health).",
     run = function(words)
       local settings = mdwui.settings("combat", mdwui.config.combatDefaults)
       if not words[2] then
@@ -1648,7 +1649,8 @@ end
 local PROMPT_HELP = { vitals = "the vitals prompt line", worth = "the worth line (prompt2)",
   hp = "HP gauge", ae = "AE gauge", balance = "balance gauge", enemy = "target's HP gauge" }
 local COMBAT_HELP = { hp = "your HP gauge", ae = "your AE gauge", balance = "your balance gauge",
-  enemy = "enemy HP gauges", info = "the enemy-names section" }
+  companion = "your companion's HP gauge", enemy = "enemy HP gauges",
+  info = "the enemy-names section" }
 
 local ONOFF_ROWS = {
   { cmd = "sidebar left", link = "sidebar left", opts = "on|off   (also: ui left)",

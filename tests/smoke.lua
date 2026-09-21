@@ -929,6 +929,56 @@ do
 end
 H.callbacks["MDW_ContextMenuItem2"].click() -- back off for the later sections
 check(combat._rows["ae"] == nil, "AE gauge leaves when toggled off")
+
+-- The companion's bar (a Shaman's spirit beast fights beside them). Its
+-- health rides Group.Vitals and nothing else, so that push repaints the
+-- Combat widget as well as the Group panel - and the bar wears the Group
+-- widget's bands, since one creature drawn two colours on two panels would
+-- read as two creatures. Its own do block: 200 locals per chunk.
+do
+  local function rowIndex(id)
+    for i, row in ipairs(combat._rowDefs or {}) do
+      if tostring(row.id) == id then return i end
+    end
+  end
+  gmcp.Group.Info.members[3] = { id = "m:7", name = "a spirit wolf",
+    status = "companion", companion = true }
+  gmcp.Group.Vitals[3] = { id = "m:7", name = "a spirit wolf", level = 3,
+    health = 50, healthcurrent = 15, healthmax = 30, companion = true }
+  raiseEvent("gmcp.Group.Info")
+  raiseEvent("gmcp.Group.Vitals")
+  check(combat._rows["comp_m:7"] ~= nil
+    and combat._rows["comp_m:7"].el.text._echoed[1] == "a spirit wolf 15/30",
+    "a companion in Group.Vitals draws its bar in the Combat widget")
+  check(combat._rows["hdr_companion"] ~= nil
+    and rowIndex("hp") < rowIndex("comp_m:7")
+    and rowIndex("comp_m:7") < rowIndex("hdr_bars"),
+    "the companion sits below the player gauges and above the enemy bars")
+  check(combat._rows["comp_m:7"].front == groupWidget._rows["hp_3"].front,
+    "one beast, one colour: the Combat bar bands like the Group widget's")
+  gmcp.Group.Vitals[3].healthcurrent = 30
+  raiseEvent("gmcp.Group.Vitals")
+  check(combat._rows["comp_m:7"].el._value == 30
+    and combat._rows["comp_m:7"].el.text._echoed[1] == "a spirit wolf 30/30",
+    "a Group.Vitals push moves the bar in place")
+  -- The menu row and `ui combat companion` are the same setter.
+  check(H.labels["MDW_ContextMenuItem4"]._echoed[1]:find("[x] Companion", 1, true) ~= nil,
+    "the companion row is checked by default")
+  H.callbacks["MDW_ContextMenuItem4"].click() -- Companion off
+  check(combat._rows["comp_m:7"] == nil and combat._rows["hdr_companion"] == nil
+    and mdw.gameSettings[mdwui.packageName].combat.companion == false,
+    "toggling Companion off takes the bar and its header away")
+  H.callbacks["MDW_ContextMenuItem4"].click() -- back on for the check below
+  check(combat._rows["comp_m:7"] ~= nil, "and brings them back")
+  -- Leaving a group clears both payloads: no companion, no section - not an
+  -- empty header over nothing.
+  gmcp.Group.Info.members[3] = nil
+  gmcp.Group.Vitals[3] = nil
+  raiseEvent("gmcp.Group.Vitals")
+  check(combat._rows["comp_m:7"] == nil and combat._rows["hdr_companion"] == nil,
+    "the section goes with the companion")
+  raiseEvent("gmcp.Group.Info")
+end
 mdw.closeAllMenus()
 
 -- 5b. Music (guide 5.16): the catalog and the settings are two packages, and
@@ -2087,6 +2137,13 @@ check(uiRun("prompt"):find("worth on", 1, true) ~= nil, "bare ui prompt lists th
 uiRun("combat ae on")
 check(mdw.widgets["Combat"]._rows["ae"] ~= nil, "ui combat turns a widget section on")
 uiRun("combat ae off")
+-- Every menu toggle answers to the keyboard as well, the companion bar
+-- included - the key lists the menu and `ui combat` walk are the same one.
+uiRun("combat companion off")
+check(mdw.gameSettings[mdwui.packageName].combat.companion == false
+  and uiRun("combat"):find("companion off", 1, true) ~= nil,
+  "ui combat reaches the companion bar and lists it")
+uiRun("combat companion on")
 uiRun("prompt bar off")
 check(mdw.visibility.promptBar == false, "ui prompt bar hides the bar itself")
 uiRun("prompt bar on")

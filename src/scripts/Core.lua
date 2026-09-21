@@ -180,6 +180,22 @@ function mdwui.grpFillColor(cur, max)
   return g.grpCritical
 end
 
+--- One Group.Vitals row as a bar: the value, the maximum, and the label -
+-- exact numbers when the server sent them, else the percentage the bar is
+-- drawn from anyway (updateGroupPanel's fallback). The Group panel and the
+-- Combat widget's companion row draw the SAME creature, so both read it from
+-- here rather than each building their own and drifting apart - the reason
+-- mdwui.aeGauge exists for the two AE surfaces.
+function mdwui.grpGauge(stats)
+  local cur = tonumber(stats.healthcurrent) or 0
+  local max = tonumber(stats.healthmax) or 0
+  if max > 0 then
+    return cur, max, string.format("%s/%s", mdwui.fmtNum(cur), mdwui.fmtNum(max))
+  end
+  local pct = tonumber(stats.health) or 0
+  return pct, 100, pct .. "%"
+end
+
 ---------------------------------------------------------------------------
 -- SETTINGS
 -- Player toggles from the vertical-ellipsis menus, persisted in MDW's

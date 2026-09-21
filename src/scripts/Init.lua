@@ -575,7 +575,15 @@ local handlers = {
   ["gmcp.Char.Inventory.Ingredients"] = function() mdwui.renderForage() end,
 
   ["gmcp.Group.Info"] = function() mdwui.renderGroup() end,
-  ["gmcp.Group.Vitals"] = function() mdwui.renderGroup() end,
+  -- Vitals also carries the companion bar the Combat widget draws, and it is
+  -- the only push that does - Char.Vitals never mentions the companion. The
+  -- extra repaint is the same pure function the per-beat combat pushes
+  -- already call, and Group.Vitals arrives on movement and combat-state
+  -- changes rather than per beat.
+  ["gmcp.Group.Vitals"] = function()
+    mdwui.renderGroup()
+    mdwui.renderCombat()
+  end,
 
   -- Journal counts (guide 5.15). The counts handler takes the event's second
   -- argument - Mudlet raises gmcp.Char.Journal for List and Entry arrivals

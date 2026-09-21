@@ -229,11 +229,12 @@ mdwui.config = {
   -- Which prompt-bar / Combat-widget elements show, before the player's own
   -- saved choices (the vertical-ellipsis menus persist into
   -- mdw.gameSettings). Values mirror the web client's promptBarSettings and
-  -- combatWidgetSettings defaults; `info` is the enemy-names section.
+  -- combatWidgetSettings defaults; `info` is the enemy-names section and
+  -- `companion` the companion's health bar, both on like the web client's.
   promptBarDefaults = { vitals = false, worth = true, hp = true, ae = true,
     balance = true, enemy = false },
-  combatDefaults = { hp = true, ae = false, balance = false, enemy = true,
-    info = true },
+  combatDefaults = { hp = true, ae = false, balance = false, companion = true,
+    enemy = true, info = true },
 
   -- Numpad walking is the package's own native key folder (src/keys/keys.json
   -- and src/keys/<folder>/keys.json): Mudlet installs and removes it with the

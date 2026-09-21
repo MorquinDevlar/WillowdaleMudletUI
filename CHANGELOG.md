@@ -30,6 +30,11 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+### Added
+- Your companion's health bar in the Combat widget, between your own gauges and
+  the enemy bars. It shows whenever your companion is out, grouped or not, and the widget's
+  settings menu has a `Companion` row to turn it off (`ui combat companion off`).
+
 ## 0.5.3 - 2026-09-10
 
 ### Added

@@ -248,18 +248,7 @@ function mdwui.renderGroup()
 
       -- Invited players have not accepted yet - no vitals to show (web rule).
       if not invited then
-        -- Exact values when the server sent them, else the percentage the
-        -- bar is drawn from anyway (updateGroupPanel's fallback).
-        local hp = tonumber(stats.healthcurrent) or 0
-        local hpMax = tonumber(stats.healthmax) or 0
-        local value, max, label
-        if hpMax > 0 then
-          value, max = hp, hpMax
-          label = string.format("%s/%s", mdwui.fmtNum(hp), mdwui.fmtNum(hpMax))
-        else
-          value, max = tonumber(stats.health) or 0, 100
-          label = value .. "%"
-        end
+        local value, max, label = mdwui.grpGauge(stats)
         -- The tag shares the gauge's line, in the slice MDW carves off the
         -- bar for it - except for a companion, whose tag stayed on the name
         -- line above, so its bar runs full width.

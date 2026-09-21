@@ -63,6 +63,22 @@ local function balanceGauge()
     tostring(bal.seconds or "") .. "s", g.balFillDrain
 end
 
+--- The companions in gmcp.Group.Vitals, in the order the server lists them.
+-- Group.Vitals is the ONLY push carrying a companion's health - the Group
+-- panel reads these same rows - and it names no owner, so every companion
+-- present is drawn rather than one guessed to be the player's: in a party of
+-- two shamans, picking the first would put someone else's beast under the
+-- player's own gauges. Two consequences worth knowing: a player outside a
+-- group is sent no Group.Vitals at all, so a solo companion has nothing to
+-- draw from, and the list empties the moment the group does.
+local function companionVitals()
+  local companions = {}
+  for _, v in ipairs(mdwui.tbl(((gmcp and gmcp.Group) or {}).Vitals)) do
+    if v.companion then companions[#companions + 1] = v end
+  end
+  return companions
+end
+
 function mdwui.renderCombat()
   local widget = mdwui.w("Combat")
   if not widget then return end
@@ -147,6 +163,26 @@ function mdwui.renderCombat()
     gaugeRow("balance", value, max, text, fill, mdwui.trackCss(g.balTrack))
   end
 
+  -- The companion sits between the player's gauges and the enemy bars: it
+  -- fights beside the player without being either. Drawn with the GROUP
+  -- widget's bands and track rather than the player's own HP colors - the
+  -- same creature's bar is already on screen over there, and two panels
+  -- painting one beast differently would read as two different creatures.
+  -- With no companion, or the toggle off, the section contributes no rows at
+  -- all and MDW drops the gauges along with them.
+  if s.companion then
+    local companions = companionVitals()
+    if #companions > 0 then
+      header("hdr_companion", #companions > 1 and "COMPANIONS:" or "COMPANION:")
+      for _, c in ipairs(companions) do
+        local value, max, label = mdwui.grpGauge(c)
+        gaugeRow("comp_" .. tostring(c.id), value, max,
+          string.format("%s %s", c.name or "?", label),
+          mdwui.grpFillColor(value, max), mdwui.trackCss(g.grpTrack))
+      end
+    end
+  end
+
   if s.enemy then
     header("hdr_bars", "ENEMIES:")
     if inCombat then
@@ -219,6 +255,7 @@ local function combatMenuItems()
     toggle("hp", "HP Gauge"),
     toggle("ae", "AE Gauge"),
     toggle("balance", "Balance"),
+    toggle("companion", "Companion"),
     toggle("enemy", "Enemy Gauges"),
     toggle("info", "Enemy Names"),
   }
