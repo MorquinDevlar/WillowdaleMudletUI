@@ -30,6 +30,8 @@ out of the version number alone - so neither may change.
 
 ## Unreleased
 
+## 0.5.4 - 2026-09-21
+
 ### Added
 - Your companion's health bar in the Combat widget, between your own gauges and
   the enemy bars. It shows whenever your companion is out, grouped or not, and the widget's
