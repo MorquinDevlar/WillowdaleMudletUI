@@ -104,7 +104,15 @@ mdwui.version = "0.5.5"
 -- a combat beat cost, since the Combat widget and the prompt row repaint on
 -- every push. Pinned for the reason 0.9.1 gives: MDW never updates itself, so
 -- an improvement this package does not require is one no player ever gets.
-mdwui.minMdwVersion = "0.9.5"
+--
+-- 0.9.6 is what makes an MDW-FIRST update finish. Installing MDW starts a
+-- profile save, the swap lands in it a second later, and Mudlet refuses every
+-- uninstall while it saves; 0.9.5's mdw.swapPackage ignored the refusal and
+-- reported success, and the update stopped at "Installing...". 0.9.6 waits the
+-- save out and says "retrying"/"queued". It reaches players on OLDER copies of
+-- this package as well: their updater installs the MDW pinned here first and
+-- then calls ITS swapPackage.
+mdwui.minMdwVersion = "0.9.6"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
