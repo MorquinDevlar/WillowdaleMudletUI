@@ -30,6 +30,8 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+## 0.5.5 - 2026-09-24
+
 ### Changed
 - Auto-targeting the next enemy no longer echoes its command into your main window.
 - Walking and fighting redraw far less of the UI, most of all with the Journal open on Quests.
