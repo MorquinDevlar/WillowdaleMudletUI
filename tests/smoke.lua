@@ -387,7 +387,7 @@ end
 local topPlain = topBarPlain()
 check(topPlain:find("Morquin") and topPlain:find("Ranger") and topPlain:find("Lvl%. 12"),
   "top bar shows name, class and level")
-check(topPlain:find("Con%. Time: %d%dh %d%dm %d%ds"), "top bar shows the connection timer")
+check(topPlain:find("Con%. Time: %d%dh%d%dm%d%ds"), "top bar shows the connection timer")
 check(topPlain:find("UI v" .. mdwui.version, 1, true) ~= nil, "top bar shows the UI version")
 check(topPlain:find("MDW v" .. mdw.version, 1, true) ~= nil, "top bar shows MDW's version")
 check(topPlain:find("Mapper v9.9.9", 1, true) ~= nil,
@@ -454,6 +454,88 @@ do -- scoped: the suite is one function, and Lua 5.1 caps it at 200 locals
   check((topBar.console._clears or 0) > barClears and #topBarPlain() == topBarWidth(),
     "top bar re-pads on every move of a live sidebar drag")
   mdw.applyDockWidth("left", dockBefore)
+end
+-- Narrow bars. The bar is one row and a MiniConsole shows the last line it
+-- holds, so a line that reached the wrap showed only its tail - the mapper's
+-- version, alone. The line stays one column short and sheds whole pieces:
+-- the versions, then the "Con. Time:" label, then class and level, then a
+-- hard cut. Tier widths come from the strings, never from column numbers: the
+-- versions move every release.
+do
+  local clock = "%d%dh%d%dm%d%ds" -- the clock ticks in real time: matched, never compared
+  local identity = "Morquin - Ranger Lvl. 12"
+  local versions = "UI v" .. mdwui.version .. " MDW v" .. mdw.version .. " Mapper v9.9.9"
+  local tier4 = #"Morquin" + 4 + 9
+  local tier3 = #identity + 4 + 9
+  local tier2 = tier3 + #"Con. Time: "
+  local tier1 = tier2 + 4 + #versions
+  local cw = calcFontSize(mdw.config.contentFontSize)
+  -- Half a glyph over: the stub's glyph width is a float, and a console
+  -- exactly `cols` glyphs wide can floor to one column fewer.
+  local function at(cols)
+    topBar.console:resize(math.ceil((cols + 0.5) * cw), nil)
+    if mdw.calculateWrap(topBar.console:get_width(), mdw.config.contentFontSize) ~= cols then
+      error("FAIL - could not size the top bar to " .. cols .. " columns", 2)
+    end
+    mdwui.renderTopBar()
+    return topBarPlain()
+  end
+  local function lit(s) return (s:gsub("%p", "%%%0")) end
+  -- Digits masked, for comparing two renders a clock tick may fall between.
+  local function shape(s) return (s:gsub("%d", "0")) end
+
+  local line = at(tier1)
+  check(#line <= tier1 - 1 and not line:find("Mapper", 1, true) and not line:find("v%d")
+    and line:find("Con. Time:", 1, true) ~= nil,
+    "one column short of the whole strip, the version group goes whole - no stray v9.9.9 - and the rest fits")
+  line = at(tier1 + 1)
+  check(#line == tier1 and line:find("^" .. lit(identity .. "    Con. Time: ") .. clock
+    .. "    " .. lit(versions) .. "$") ~= nil,
+    "tier 1: the whole strip, the versions flush right")
+  line = at(tier2 + 1)
+  check(line:find("Con. Time:", 1, true) and not line:find("UI v", 1, true),
+    "tier 2: the version group is dropped first")
+  line = at(tier3 + 1)
+  check(line:find(clock) and line:find(identity, 1, true) and not line:find("Con. Time:", 1, true),
+    "tier 3: then the Con. Time label, identity and clock kept")
+  local tier4Line = at(tier4 + 1)
+  check(tier4Line:find("^Morquin    " .. clock .. "$") and not tier4Line:find("Ranger", 1, true),
+    "tier 4: then class and level, name and clock kept")
+  line = at(tier4)
+  check(#line == tier4 - 1 and shape(line) == shape(tier4Line):sub(1, #line),
+    "tier 5: then a hard cut of name and clock, one column short of the wrap")
+
+  local bad
+  local last = math.max(130, tier1 + 4)
+  for cols = 0, last do
+    local s, limit = at(cols), cols - 1
+    local richest
+    if limit >= tier1 then
+      richest = #s == limit and s:find("^" .. lit(identity .. "    Con. Time: ") .. clock
+        .. " +" .. lit(versions) .. "$")
+    elseif limit >= tier2 then
+      richest = s:find("^" .. lit(identity .. "    Con. Time: ") .. clock .. "$")
+    elseif limit >= tier3 then
+      richest = s:find("^" .. lit(identity) .. "    " .. clock .. "$")
+    elseif limit >= tier4 then
+      richest = s:find("^Morquin    " .. clock .. "$")
+    else
+      richest = #s == math.max(0, limit) and shape(s) == ("Morquin    00h00m00s"):sub(1, #s)
+    end
+    if #s > math.max(0, limit) then
+      bad = "longer than one column short of the wrap"
+    elseif s:find("UI v", 1, true) and not s:find("Con. Time:", 1, true) then
+      bad = "the versions outlived the Con. Time label"
+    elseif s:find("Con. Time:", 1, true) and not s:find("Ranger", 1, true) then
+      bad = "the Con. Time label outlived class and level"
+    elseif not richest then
+      bad = "not the richest layout that fits"
+    end
+    if bad then bad = cols .. " columns, " .. bad .. ": '" .. s .. "'" break end
+  end
+  check(not bad, "at every width from 0 to " .. last .. " columns the bar fits, sheds in order"
+    .. " and keeps the richest layout that fits" .. (bad and (" - " .. bad) or ""))
+  mdw.layoutBars() -- restore the real width for everything downstream
 end
 -- Web defaults (promptBarSettings): the Vitals prompt line stays hidden -
 -- the gauges carry those numbers - while the Worth line (prompt2) shows.

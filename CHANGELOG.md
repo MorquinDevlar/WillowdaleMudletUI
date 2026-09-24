@@ -30,6 +30,12 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+### Changed
+- The top bar's connection clock now reads `00h00m58s`.
+
+### Fixed
+- When the window is too narrow, the top bar drops the versions first instead of showing only a version number.
+
 ## 0.5.6 - 2026-09-24
 
 ### Fixed

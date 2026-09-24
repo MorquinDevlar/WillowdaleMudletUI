@@ -102,6 +102,44 @@ local function defaultHeight(stack, px)
   mdw.resizeWidgetClass(stack, nil, math.min(px, math.floor((winH or 0) * 0.55)))
 end
 
+-- A top-bar layout is a list of {color, text} runs, so the width that decides
+-- whether it fits and the decho that paints it come from one list and cannot
+-- disagree. Byte length is the column count (names, classes and versions are
+-- ASCII). A run whose color is false carries on in the one before it: the
+-- padding, which is only spaces.
+local function runsWidth(runs)
+  local n = 0
+  for _, run in ipairs(runs) do n = n + #run[2] end
+  return n
+end
+
+local function runsDecho(runs)
+  local out = {}
+  for i, run in ipairs(runs) do
+    out[i] = run[1] and ("<" .. run[1] .. ">" .. run[2]) or run[2]
+  end
+  return table.concat(out)
+end
+
+local function joinRuns(...)
+  local out = {}
+  for i = 1, select("#", ...) do
+    for _, run in ipairs((select(i, ...))) do out[#out + 1] = run end
+  end
+  return out
+end
+
+--- The first `width` columns of a layout, cut mid-run where they end.
+local function cutRuns(runs, width)
+  local out = {}
+  for _, run in ipairs(runs) do
+    if width <= 0 then break end
+    out[#out + 1] = { run[1], run[2]:sub(1, width) }
+    width = width - #run[2]
+  end
+  return out
+end
+
 --- The top chrome bar: session and identity strip between the header and the
 -- main console, split left/right. Left is who you are (Char.Info name,
 -- class and level) plus the connection timer counting up from
@@ -112,6 +150,19 @@ end
 -- own wrap width (the same mdw.calculateWrap MDW applies to it in
 -- layoutBars), which is what keeps the right group flush at the bar's right
 -- edge as the window and sidebars change size.
+--
+-- The line must never REACH that wrap. The bar is one row tall and a
+-- MiniConsole shows the last line it holds, so a line that wrapped showed
+-- only its tail - on a narrow bar, the mapper's version number and nothing
+-- else. So the line stays at least one column short of the wrap, never
+-- carries a newline, and sheds WHOLE pieces when it does not fit, the
+-- richest layout that fits winning: the version group first, then the
+-- "Con. Time:" label, then class and level, and only then a hard cut of name
+-- and clock. The versions go first because they are static and `ui` prints
+-- them.
+--
+-- It is also the bar's reflow, run on every mouse move of a sidebar drag, and
+-- the 1s ticker's repaint: a pure repaint from state, nothing kept or sent.
 function mdwui.renderTopBar()
   local bar = mdw and mdw.bars and mdw.bars["WillowdaleTop"]
   if not (bar and bar.console) then return end
@@ -121,47 +172,46 @@ function mdwui.renderTopBar()
   local cls = mdwui.titleCase(info.class or "-")
   local lvl = (info.level == nil) and "-" or tostring(info.level)
   local secs = math.max(0, os.time() - (mdwui.state.loginAt or os.time()))
-  local hrs, mins, sec =
-    math.floor(secs / 3600), math.floor(secs / 60) % 60, secs % 60
-  local connText = string.format("%02dh %02dm %02ds", hrs, mins, sec)
-  local uiVersion = tostring(mdwui.version)
-  local mdwVersion = (mdw and mdw.version) or "-"
-  local mapperVersion = (mapper and mapper.version) or "-"
-
-  -- Measure on the plain text first, then colorize: byte length is the
-  -- character count here (names and classes are ASCII).
-  local leftPlain = string.format("%s - %s Lvl. %s    Con. Time: %s",
-    name, cls, lvl, connText)
-  local rightPlain = string.format("UI v%s MDW v%s Mapper v%s",
-    uiVersion, mdwVersion, mapperVersion)
   local cols = mdw.calculateWrap and bar.console.get_width
     and mdw.calculateWrap(bar.console:get_width(), mdw.config.contentFontSize) or 0
-  -- One column short of the wrap, and no trailing newline: the bar is a
-  -- single text row, and either would push the line onto a second row that
-  -- the bar is not tall enough to show.
-  local gap = math.max(4, (cols - 1) - #leftPlain - #rightPlain)
 
-  -- Colorized twins of the two measured strings above - tags only, so the
-  -- padding still lands. Digits body text, unit letters the class gold.
-  local connDecho = string.format("<%s>%02d<%s>h <%s>%02d<%s>m <%s>%02d<%s>s",
-    C.text, hrs, C.charGold, C.text, mins, C.charGold, C.text, sec, C.charGold)
+  -- Digits body text, unit letters the class gold. No inner spaces: the
+  -- clock is in every layout down to the last, where each column counts.
+  local clock = {
+    { C.text, string.format("%02d", math.floor(secs / 3600)) }, { C.charGold, "h" },
+    { C.text, string.format("%02d", math.floor(secs / 60) % 60) }, { C.charGold, "m" },
+    { C.text, string.format("%02d", secs % 60) }, { C.charGold, "s" },
+  }
+  local identity = {
+    { C.charHeader, name .. " " }, { C.charGold, "- " .. cls .. " " },
+    { C.charLabel, "Lvl. " }, { C.text, lvl .. "    " },
+  }
+  local session = joinRuns(identity, { { C.charLabel, "Con. Time: " } }, clock)
   -- Only the package name carries its hue; the "v" is dim and the version
   -- itself is the same body text as the clock's digits, so the strip reads
   -- as three colored labels over one uniform kind of number.
-  local function versionDecho(label, version, color)
-    return string.format("<%s>%s <%s>v<%s>%s", color, label, C.dim, C.text, version)
-  end
+  local versions = {
+    { C.verUI, "UI " }, { C.dim, "v" }, { C.text, tostring(mdwui.version) .. " " },
+    { C.verMDW, "MDW " }, { C.dim, "v" },
+    { C.text, tostring((mdw and mdw.version) or "-") .. " " },
+    { C.verMapper, "Mapper " }, { C.dim, "v" },
+    { C.text, tostring((mapper and mapper.version) or "-") },
+  }
 
+  local limit = cols - 1
+  local gap = limit - runsWidth(session) - runsWidth(versions)
+  local line
+  if gap >= 4 then
+    line = joinRuns(session, { { false, string.rep(" ", gap) } }, versions)
+  else
+    local nameClock = joinRuns({ { C.charHeader, name .. "    " } }, clock)
+    for _, layout in ipairs({ session, joinRuns(identity, clock), nameClock }) do
+      if runsWidth(layout) <= limit then line = layout break end
+    end
+    line = line or cutRuns(nameClock, limit)
+  end
   bar.console:clear()
-  bar.console:decho(string.format(
-    "<%s>%s <%s>- %s <%s>Lvl. <%s>%s    <%s>Con. Time: <%s>%s%s%s %s %s",
-    C.charHeader, name, C.charGold, cls,
-    C.charLabel, C.text, lvl,
-    C.charLabel, C.text, connDecho,
-    string.rep(" ", gap),
-    versionDecho("UI", uiVersion, C.verUI),
-    versionDecho("MDW", mdwVersion, C.verMDW),
-    versionDecho("Mapper", mapperVersion, C.verMapper)))
+  bar.console:decho(runsDecho(line))
 end
 
 --- Repaint every surface from whatever the gmcp table already holds. Used at
