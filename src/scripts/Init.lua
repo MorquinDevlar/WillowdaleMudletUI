@@ -106,7 +106,7 @@ end
 -- whether it fits and the decho that paints it come from one list and cannot
 -- disagree. Byte length is the column count (names, classes and versions are
 -- ASCII). A run whose color is false carries on in the one before it: the
--- padding, which is only spaces.
+-- padding and the space between two versions, which are only spaces.
 local function runsWidth(runs)
   local n = 0
   for _, run in ipairs(runs) do n = n + #run[2] end
@@ -156,10 +156,11 @@ end
 -- only its tail - on a narrow bar, the mapper's version number and nothing
 -- else. So the line stays at least one column short of the wrap, never
 -- carries a newline, and sheds WHOLE pieces when it does not fit, the
--- richest layout that fits winning: the version group first, then the
--- "Con. Time:" label, then class and level, and only then a hard cut of name
--- and clock. The versions go first because they are static and `ui` prints
--- them.
+-- richest layout that fits winning: the versions first, one at a time from
+-- the right (the mapper's, MDW's, then ours), then the "Con. Time:" label,
+-- then class and level, and only then a hard cut of name and clock. The
+-- versions go first because they are static and `ui` prints them; ours goes
+-- last because it is the one a bug report asks for.
 --
 -- It is also the bar's reflow, run on every mouse move of a sidebar drag, and
 -- the 1s ticker's repaint: a pure repaint from state, nothing kept or sent.
@@ -191,19 +192,27 @@ function mdwui.renderTopBar()
   -- itself is the same body text as the clock's digits, so the strip reads
   -- as three colored labels over one uniform kind of number.
   local versions = {
-    { C.verUI, "UI " }, { C.dim, "v" }, { C.text, tostring(mdwui.version) .. " " },
-    { C.verMDW, "MDW " }, { C.dim, "v" },
-    { C.text, tostring((mdw and mdw.version) or "-") .. " " },
-    { C.verMapper, "Mapper " }, { C.dim, "v" },
-    { C.text, tostring((mapper and mapper.version) or "-") },
+    { { C.verUI, "UI " }, { C.dim, "v" }, { C.text, tostring(mdwui.version) } },
+    { { C.verMDW, "MDW " }, { C.dim, "v" }, { C.text, tostring((mdw and mdw.version) or "-") } },
+    { { C.verMapper, "Mapper " }, { C.dim, "v" },
+      { C.text, tostring((mapper and mapper.version) or "-") } },
   }
 
   local limit = cols - 1
-  local gap = limit - runsWidth(session) - runsWidth(versions)
   local line
-  if gap >= 4 then
-    line = joinRuns(session, { { false, string.rep(" ", gap) } }, versions)
-  else
+  for count = #versions, 1, -1 do
+    local group = {}
+    for i = 1, count do
+      if i > 1 then group[#group + 1] = { false, " " } end
+      for _, run in ipairs(versions[i]) do group[#group + 1] = run end
+    end
+    local gap = limit - runsWidth(session) - runsWidth(group)
+    if gap >= 4 then
+      line = joinRuns(session, { { false, string.rep(" ", gap) } }, group)
+      break
+    end
+  end
+  if not line then
     local nameClock = joinRuns({ { C.charHeader, name .. "    " } }, clock)
     for _, layout in ipairs({ session, joinRuns(identity, clock), nameClock }) do
       if runsWidth(layout) <= limit then line = layout break end

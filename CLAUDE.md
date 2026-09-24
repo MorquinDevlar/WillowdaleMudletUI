@@ -313,15 +313,16 @@ right-aligned - padded to the bar console's wrap width (the same
 `mdw.calculateWrap` MDW applies to it). It is ONE row and never wraps: a
 MiniConsole shows the last line it holds, so a line that wrapped showed only
 its tail - the mapper's version number and nothing else. Short of width it
-sheds whole pieces instead, in a fixed order the user chose: the version group
-first (static, and the `ui` overview prints it), then the clock's
-`Con. Time:` label, then class and level; below that it cuts name and clock at
-`wrap - 1`. Two things repaint it and they cover different ground: the 1s
-ticker carries the connection clock, and the bar's `reflow` (MDW 0.9.1, passed
-to `createBar`) carries the WIDTH - MDW calls it after resizing the bar console
-on every layout pass, live drag moves included, which is what re-pads the
-version group, or sheds it, as the window or a sidebar is dragged instead of a
-tick later.
+sheds whole pieces instead, in a fixed order the user chose: the versions
+first (static, and the `ui` overview prints them), one at a time from the
+right so that ours - the one a bug report asks for - goes last, then the
+clock's `Con. Time:` label, then class and level; below that it cuts name and
+clock at `wrap - 1`. Two things repaint it and they cover different ground: the
+1s ticker carries the connection clock, and the bar's `reflow` (MDW 0.9.1,
+passed to `createBar`) carries the WIDTH - MDW calls it after resizing the bar
+console on every layout pass, live drag moves included, which is what re-pads
+the version group, or sheds from it, as the window or a sidebar is dragged
+instead of a tick later.
 
 ## Verification (all three before calling work done)
 

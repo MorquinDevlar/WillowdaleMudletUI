@@ -458,17 +458,21 @@ end
 -- Narrow bars. The bar is one row and a MiniConsole shows the last line it
 -- holds, so a line that reached the wrap showed only its tail - the mapper's
 -- version, alone. The line stays one column short and sheds whole pieces:
--- the versions, then the "Con. Time:" label, then class and level, then a
--- hard cut. Tier widths come from the strings, never from column numbers: the
--- versions move every release.
+-- the versions one at a time from the right, then the "Con. Time:" label,
+-- then class and level, then a hard cut. Widths come from the strings, never
+-- from column numbers: the versions move every release.
 do
   local clock = "%d%dh%d%dm%d%ds" -- the clock ticks in real time: matched, never compared
   local identity = "Morquin - Ranger Lvl. 12"
-  local versions = "UI v" .. mdwui.version .. " MDW v" .. mdw.version .. " Mapper v9.9.9"
-  local tier4 = #"Morquin" + 4 + 9
-  local tier3 = #identity + 4 + 9
-  local tier2 = tier3 + #"Con. Time: "
-  local tier1 = tier2 + 4 + #versions
+  local uiV, mdwV = "UI v" .. mdwui.version, "MDW v" .. mdw.version
+  -- The version group by how many it keeps, the rightmost going first.
+  local groups = { uiV, uiV .. " " .. mdwV, uiV .. " " .. mdwV .. " Mapper v9.9.9" }
+  -- Layout widths in columns, poorest first.
+  local nameClock = #"Morquin" + 4 + 9
+  local idClock = #identity + 4 + 9
+  local session = idClock + #"Con. Time: "
+  local function withVersions(n) return session + 4 + #groups[n] end
+  local full = withVersions(3)
   local cw = calcFontSize(mdw.config.contentFontSize)
   -- Half a glyph over: the stub's glyph width is a float, and a console
   -- exactly `cols` glyphs wide can floor to one column fewer.
@@ -483,47 +487,60 @@ do
   local function lit(s) return (s:gsub("%p", "%%%0")) end
   -- Digits masked, for comparing two renders a clock tick may fall between.
   local function shape(s) return (s:gsub("%d", "0")) end
+  -- Identity and the labelled clock, padding, then this group flush right.
+  local function flush(group)
+    return "^" .. lit(identity .. "    Con. Time: ") .. clock .. " +" .. lit(group) .. "$"
+  end
 
-  local line = at(tier1)
-  check(#line <= tier1 - 1 and not line:find("Mapper", 1, true) and not line:find("v%d")
-    and line:find("Con. Time:", 1, true) ~= nil,
-    "one column short of the whole strip, the version group goes whole - no stray v9.9.9 - and the rest fits")
-  line = at(tier1 + 1)
-  check(#line == tier1 and line:find("^" .. lit(identity .. "    Con. Time: ") .. clock
-    .. "    " .. lit(versions) .. "$") ~= nil,
-    "tier 1: the whole strip, the versions flush right")
-  line = at(tier2 + 1)
-  check(line:find("Con. Time:", 1, true) and not line:find("UI v", 1, true),
-    "tier 2: the version group is dropped first")
-  line = at(tier3 + 1)
+  local line = at(full)
+  check(#line == full - 1 and line:find(flush(groups[2])) and not line:find("Mapper", 1, true),
+    "one column short of the whole strip, the mapper's version goes whole - no stray v9.9.9 - and UI and MDW stay flush right")
+  line = at(full + 1)
+  check(#line == full and line:find(flush(groups[3])) ~= nil,
+    "the whole strip, the versions flush right")
+  line = at(withVersions(2) + 1)
+  check(#line == withVersions(2) and line:find(flush(groups[2])) ~= nil,
+    "the mapper's version is dropped first, UI and MDW flush right")
+  line = at(withVersions(1) + 1)
+  check(#line == withVersions(1) and line:find(flush(groups[1])) ~= nil,
+    "then MDW's, ours flush right on its own")
+  line = at(session + 1)
+  check(line:find("^" .. lit(identity .. "    Con. Time: ") .. clock .. "$") ~= nil,
+    "then ours, before the Con. Time label")
+  line = at(idClock + 1)
   check(line:find(clock) and line:find(identity, 1, true) and not line:find("Con. Time:", 1, true),
-    "tier 3: then the Con. Time label, identity and clock kept")
-  local tier4Line = at(tier4 + 1)
-  check(tier4Line:find("^Morquin    " .. clock .. "$") and not tier4Line:find("Ranger", 1, true),
-    "tier 4: then class and level, name and clock kept")
-  line = at(tier4)
-  check(#line == tier4 - 1 and shape(line) == shape(tier4Line):sub(1, #line),
-    "tier 5: then a hard cut of name and clock, one column short of the wrap")
+    "then the Con. Time label, identity and clock kept")
+  local nameClockLine = at(nameClock + 1)
+  check(nameClockLine:find("^Morquin    " .. clock .. "$") and not nameClockLine:find("Ranger", 1, true),
+    "then class and level, name and clock kept")
+  line = at(nameClock)
+  check(#line == nameClock - 1 and shape(line) == shape(nameClockLine):sub(1, #line),
+    "then a hard cut of name and clock, one column short of the wrap")
 
   local bad
-  local last = math.max(130, tier1 + 4)
+  local last = math.max(130, full + 4)
   for cols = 0, last do
     local s, limit = at(cols), cols - 1
+    local kept = #groups -- the most versions that fit, 0 for none
+    while kept > 0 and withVersions(kept) > limit do kept = kept - 1 end
     local richest
-    if limit >= tier1 then
-      richest = #s == limit and s:find("^" .. lit(identity .. "    Con. Time: ") .. clock
-        .. " +" .. lit(versions) .. "$")
-    elseif limit >= tier2 then
+    if kept > 0 then
+      richest = #s == limit and s:find(flush(groups[kept]))
+    elseif limit >= session then
       richest = s:find("^" .. lit(identity .. "    Con. Time: ") .. clock .. "$")
-    elseif limit >= tier3 then
+    elseif limit >= idClock then
       richest = s:find("^" .. lit(identity) .. "    " .. clock .. "$")
-    elseif limit >= tier4 then
+    elseif limit >= nameClock then
       richest = s:find("^Morquin    " .. clock .. "$")
     else
       richest = #s == math.max(0, limit) and shape(s) == ("Morquin    00h00m00s"):sub(1, #s)
     end
     if #s > math.max(0, limit) then
       bad = "longer than one column short of the wrap"
+    elseif s:find("Mapper v", 1, true) and not s:find("MDW v", 1, true) then
+      bad = "the mapper's version outlived MDW's"
+    elseif s:find("MDW v", 1, true) and not s:find("UI v", 1, true) then
+      bad = "MDW's version outlived ours"
     elseif s:find("UI v", 1, true) and not s:find("Con. Time:", 1, true) then
       bad = "the versions outlived the Con. Time label"
     elseif s:find("Con. Time:", 1, true) and not s:find("Ranger", 1, true) then

@@ -30,6 +30,9 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+### Changed
+- A narrow top bar drops its versions one at a time, the mapper's first and the UI's last.
+
 ## 0.5.7 - 2026-09-24
 
 ### Changed
