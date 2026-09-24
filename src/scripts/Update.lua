@@ -70,6 +70,15 @@ local INSTALL_WAIT_SECONDS = 1
 -- over the top of an install that has not been attempted yet. A LAST resort:
 -- it says what Mudlet reported rather than only that nothing arrived.
 local WATCHDOG_SECONDS = 20
+-- Mudlet refuses every uninstall while it saves the profile, and Mudlet 5
+-- queues every install behind the save - and installing a package is what
+-- starts one, so an MDW-first update swaps this package into a save a second
+-- after installing MDW. mdw.swapPackage (MDW 0.9.6) waits it out on a ladder
+-- of 1, 2, 4 and 8 seconds, and installMdwNow uses the same ladder for the MDW
+-- swap this package makes itself. The watchdog for a swap still in progress
+-- leaves the whole ladder plus the install room to finish.
+local RETRY_DELAYS = { 1, 2, 4, 8 }
+local PENDING_WATCHDOG_SECONDS = 30
 
 --- Named Mudlet colours only (verified against color_table in GUIUtils.lua -
 -- a name missing there prints literally).
@@ -435,6 +444,21 @@ local function verified(path)
   return true
 end
 
+--- The manual install behind the link below. A REPLACEMENT while Mudlet
+-- still holds this package - most failures that end at the link leave the
+-- old copy in place, and Mudlet refuses an install offered over it - so it
+-- goes through mdw.swapPackage, which uninstalls first. A plain install
+-- otherwise.
+local function manualInstall(path)
+  local held = getPackages and table.contains(getPackages(), mdwui.packageName)
+  if held and mdw and type(mdw.swapPackage) == "function" then
+    local ok, why = mdw.swapPackage(mdwui.packageName, path)
+    if not ok then mdwui.sayBad(string.format("Update failed - %s.", plain(tostring(why)))) end
+    return
+  end
+  installPackage(path)
+end
+
 --- Hand the verified package back. Shared, because every way an update can
 -- fail ends the same way: the file is on disk and good, so the one useful
 -- thing left is a click that installs it.
@@ -445,25 +469,26 @@ end
 function mdwui.offerManualInstall(path)
   if not cechoLink then return end
   cechoLink(string.format("<%s>[Click here to manually install the update]", P.link),
-    function() installPackage(path) end, "Install " .. plain(path), true)
+    function() manualInstall(path) end, "Install " .. plain(path), true)
   line("")
 end
 
 --- The last line of defence: if Mudlet never reported our package installed,
 -- the swap failed somewhere we cannot see. The verified file is still on
 -- disk, so hand it over with a click rather than leave a player with no UI.
-function mdwui.updateWatchdog(path)
+-- `why` is the caller's account when it has one; the fallback swap's own
+-- state gives it otherwise.
+function mdwui.updateWatchdog(path, why)
   if mdwui.state.updateInstalled then return end
   mdwui.sayBad("The update did not finish installing. The package is saved at:")
   line(string.format("  <%s>%s", P.text, plain(path)))
   -- WHY it did not, in the terms the swap actually works in. Two theories about
   -- this failure have already been wrong, so the next one reports rather than
   -- leaves it to be guessed at from a timestamp.
-  local why
-  if mdwui.state.installAttempted then
+  if not why and mdwui.state.installAttempted then
     why = string.format("Mudlet returned %s from the install and then never reported the package installed.",
       tostring(mdwui.state.installReturned))
-  else
+  elseif not why then
     why = "The install never ran - the timer that carries it did not fire."
   end
   line(string.format("  <%s>%s", P.dim, why))
@@ -542,15 +567,29 @@ end
 -- package spent a day on - an install offered before the uninstall had
 -- finished, accepted, then silently ignored - cannot happen this way, and a
 -- refusal is known HERE rather than twenty seconds later from a watchdog.
--- No timers either way, so there is no watchdog to arm.
+--
+-- Except while Mudlet saves the profile, when neither half can happen yet (see
+-- RETRY_DELAYS) - and an MDW-first update arrives here a second after
+-- installing MDW started a save. MDW then answers "retrying" or "queued" and
+-- finishes the swap on its own once the save ends, so this says so and arms a
+-- watchdog in case the new package never arrives.
 function swapNow(path, version)
   if mdw and type(mdw.swapPackage) == "function" then
-    local swapped, refusal = mdw.swapPackage(mdwui.packageName, path)
+    local swapped, note = mdw.swapPackage(mdwui.packageName, path)
     if not swapped then
       mdwui.sayBad(string.format("Update failed - %s. The package is saved at:",
-        plain(tostring(refusal or "unknown reason"))))
+        plain(tostring(note or "unknown reason"))))
       line(string.format("  <%s>%s", P.text, plain(path)))
       mdwui.offerManualInstall(path)
+    elseif note == "retrying" or note == "queued" then
+      mdwui.say("Mudlet is saving the profile - the update installs as soon as it has finished.")
+      -- A BARE timer, not mdwui.addTimer: this copy's own uninstall, which MDW
+      -- has not been let run yet, kills every registered one - and a failure
+      -- after that uninstall is exactly what this is for. It reads
+      -- updateInstalled when it fires, so a swap that completes leaves it silent.
+      tempTimer(PENDING_WATCHDOG_SECONDS, function()
+        mdwui.updateWatchdog(path, "Mudlet was saving the profile, and the new package never arrived after it.")
+      end)
     end
     -- Success needs nothing said here: the new package's own sysInstallPackage
     -- handler reports it, and it has the version to name.
@@ -762,7 +801,9 @@ local function installMdw(path)
   if id then mdwui.addTimer(id) end
 end
 
-function installMdwNow(path)
+-- @param step which RETRY_DELAYS entry the next attempt waits; nil starts
+function installMdwNow(path, step)
+  step = step or 1
   -- Absent is the ordinary case (this package installed on its own); present
   -- means it is merely too old, and Mudlet refuses to install over a package
   -- name it already holds. getPackages is Mudlet 4.12+.
@@ -773,6 +814,21 @@ function installMdwNow(path)
     -- is still running, which is the whole reason a package built on MDW is
     -- what moves MDW.
     uninstallPackage("MDW")
+    -- Checked, not trusted, for mdw.swapPackage's reason: Mudlet refuses every
+    -- uninstall while it saves the profile, raising nothing, and the install
+    -- below would then be refused over the copy it still holds. Wait it out on
+    -- the same ladder - on BARE timers, because an MDW teardown in between would
+    -- take registered ones, and the framework upgrade with them.
+    if table.contains(getPackages(), "MDW") then
+      local delay = RETRY_DELAYS[step]
+      if not delay then
+        mdwui.sayBad("MDW could not be replaced - Mudlet would not uninstall the old copy.")
+        sayManualMdw()
+        return
+      end
+      tempTimer(delay, function() installMdwNow(path, step + 1) end)
+      return
+    end
   end
   -- So: no wait and no timer. This is the mirror of mdw.swapPackage - the same
   -- back-to-back uninstall and install, in the direction MDW cannot do for

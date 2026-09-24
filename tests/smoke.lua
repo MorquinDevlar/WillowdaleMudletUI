@@ -2955,6 +2955,112 @@ check(#H.downloads == downloadsBeforeSwap, "the rebuild after the swap does not 
 check(uiRun("update install"):find("No update is pending", 1, true) ~= nil,
   "with the offer spent, a typed install asks for a check first instead of re-downloading it")
 
+-- An MDW-first update installs MDW, which makes Mudlet save the profile, and
+-- swaps this package a second later - inside that save. Mudlet refuses the
+-- uninstall then, and an install offered over the copy it still holds is
+-- refused in turn; under Mudlet 5 that came after the save, from an install
+-- already answered true, and a live client stopped at "Installing..." with
+-- nothing said. MDW waits the save out now, and the swap says it is waiting.
+do
+  local function fire(id)
+    local fn = H.timers[id]
+    H.timers[id] = nil
+    if fn then fn() end
+  end
+  mdwui.state.updateVersion, mdwui.state.updateBusyAt = "9.9.9", nil
+  mdwui.installUpdate()
+  local savePath = H.downloads[#H.downloads].path
+  writeFile(savePath, PACKAGE_BYTES)
+  raiseEvent("sysDownloadDone", savePath)
+  local mark, installsAtSave = H.nextTimerId, #H.installed
+  H.saving = true
+  H.main._echoed, H.main._links = {}, {}
+  H.flushTimers() -- the tick: the swap, into the save
+  local armed = {}
+  for id in pairs(H.timers) do
+    if id > mark then armed[#armed + 1] = id end
+  end
+  table.sort(armed) -- MDW's retry first, then the watchdog armed for the wait
+  check(table.concat(H.main._echoed):find("saving the profile", 1, true) ~= nil
+    and #H.installed == installsAtSave and #armed == 2,
+    "a swap made during a profile save says it will finish after it, and installs nothing yet")
+  H.saving = false
+  fire(armed[1])
+  check(H.uninstalled[#H.uninstalled] == mdwui.packageName and H.installed[#H.installed] == savePath,
+    "once the save is over, MDW's retry swaps the package")
+  H.main._echoed = {}
+  raiseEvent("sysInstallPackage", mdwui.packageName)
+  fire(armed[2])
+  local settled = table.concat(H.main._echoed)
+  check(settled:find("installed - done", 1, true) ~= nil and settled:find("did not finish", 1, true) == nil,
+    "the new package announces itself, and the watchdog armed for the wait stays silent")
+  H.flushTimers()
+end
+-- The watchdog is armed while this copy is still installed, and MDW's retry
+-- then uninstalls it - which kills every timer this package registered. The
+-- failure the watchdog is for comes AFTER that uninstall (an install Mudlet
+-- queued behind a second save, never landing), so it must not be one of them.
+do
+  mdwui.state.updateVersion, mdwui.state.updateBusyAt = "9.9.9", nil
+  mdwui.installUpdate()
+  local queuedPath = H.downloads[#H.downloads].path
+  writeFile(queuedPath, PACKAGE_BYTES)
+  raiseEvent("sysDownloadDone", queuedPath)
+  local mark = H.nextTimerId
+  H.saving = true
+  H.flushTimers() -- the swap, refused: MDW arms its retry, this the watchdog
+  local armed = {}
+  for id in pairs(H.timers) do
+    if id > mark then armed[#armed + 1] = id end
+  end
+  table.sort(armed)
+  H.saving = false
+  local realUninstall = uninstallPackage
+  uninstallPackage = function(name)
+    local removed = realUninstall(name)
+    H.saving = true -- a save starts before the install
+    return removed
+  end
+  local retry = H.timers[armed[1]]
+  H.timers[armed[1]] = nil
+  retry()
+  uninstallPackage = realUninstall
+  H.main._echoed, H.main._links = {}, {}
+  local watchdog = H.timers[armed[2]]
+  H.timers[armed[2]] = nil
+  if watchdog then watchdog() end
+  check(table.concat(H.main._echoed):find("did not finish", 1, true) ~= nil,
+    "the watchdog outlives this copy's own uninstall, and speaks when the queued install never lands")
+  H.finishSave()
+  raiseEvent("sysInstallPackage", mdwui.packageName)
+  H.flushTimers()
+end
+-- A save that never lets go: MDW's retries run out and the watchdog speaks.
+-- Mudlet still holds the old copy then, so the link has to REPLACE it - an
+-- install offered over it is refused.
+do
+  mdwui.state.updateVersion, mdwui.state.updateBusyAt = "9.9.9", nil
+  mdwui.installUpdate()
+  local lostPath = H.downloads[#H.downloads].path
+  writeFile(lostPath, PACKAGE_BYTES)
+  raiseEvent("sysDownloadDone", lostPath)
+  H.saving = true
+  H.main._echoed, H.main._links = {}, {}
+  for _ = 1, 6 do H.flushTimers() end -- the swap, MDW's whole ladder, the watchdog
+  local lost = table.concat(H.main._echoed)
+  check(lost:find("did not finish", 1, true) ~= nil and lost:find("saving the profile", 1, true) ~= nil
+    and uiLink("[Click here to manually install the update]") ~= nil,
+    "a swap still waiting when the watchdog fires hands the package back, and says why")
+  H.saving = false
+  local uninstallsAtLink = #H.uninstalled
+  uiLink("[Click here to manually install the update]").cb()
+  check(H.uninstalled[#H.uninstalled] == mdwui.packageName and #H.uninstalled == uninstallsAtLink + 1
+    and H.installed[#H.installed] == lostPath,
+    "and its link replaces the copy Mudlet still holds instead of installing over it")
+  raiseEvent("sysInstallPackage", mdwui.packageName)
+  H.flushTimers()
+end
+
 -- One release with sixty notes is capped too: however few releases a player is
 -- behind, an offer must not scroll their session away, and the pointer at the
 -- rest is the same one the earlier-releases line uses.
@@ -3313,6 +3419,26 @@ raiseEvent("sysDownloadDone", heldPath)
 H.flushTimers()
 check(H.installed[#H.installed] == heldPath and #H.installed == heldInstalls + 1,
   "a raised minimum installs its MDW on the next tick, exactly once")
+-- The same swap in the other direction, during a profile save: Mudlet refuses
+-- to uninstall MDW as well, and would refuse an install over the copy it still
+-- holds. Retried on the ladder until Mudlet lets go.
+do
+  H.packages = { "MDW" }
+  mdwui.state.mdwFetchedFor, mdwui.state.mdwFile, mdwui.state.updateBusyAt = nil, nil, nil
+  mdwui.ensureMdw()
+  local savingPath = H.downloads[#H.downloads].path
+  writeFile(savingPath, PACKAGE_BYTES)
+  local installsAtSave = #H.installed
+  H.saving = true
+  raiseEvent("sysDownloadDone", savingPath)
+  H.flushTimers()
+  check(#H.installed == installsAtSave,
+    "an MDW uninstall refused during a profile save offers no install over the old copy")
+  H.saving = false
+  H.flushTimers()
+  check(H.installed[#H.installed] == savingPath and #H.installed == installsAtSave + 1,
+    "and the retry replaces MDW once the save is over")
+end
 mdw.version = mdwVersionForRace
 
 -- The guard is per REQUIREMENT, not per session. It used to be a plain "have

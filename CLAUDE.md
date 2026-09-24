@@ -136,7 +136,11 @@ is genuinely gone must keep the fallback and stop asking.
 Every event handler, timer, and widget goes through `mdwui.registerHandler` /
 `mdwui.addTimer` / `mdwui.state.widgets`, so `mdwui.onUninstall` can remove
 every trace while leaving MDW itself running. Anything registered another way
-will leak across uninstalls. MDW ALSO reaps our creations by ownership stamp
+will leak across uninstalls. Two one-shot timers in `Update.lua` are BARE on
+purpose, and both read their state when they fire: the watchdog for a swap MDW
+is still finishing, which has to outlive this copy's own uninstall (part of the
+very swap it watches), and the retry ladder for a refused MDW uninstall, which
+has to survive an MDW teardown. MDW ALSO reaps our creations by ownership stamp
 (everything built inside the onReady callback), but our own handler stays -
 it is what covers older MDW versions and handler-order races, and it must
 remove ALL our registrations: onReady, onTeardown, gamePackages, the top bar.
@@ -461,6 +465,21 @@ so Mudlet's installer is not re-entered from inside its own event; and arm a
 watchdog that prints a manual-install link if the swap has not completed by the
 time it fires.
 
+A PROFILE SAVE can stop the swap halfway, and an MDW-first update always swaps
+into one: Mudlet refuses every uninstall while it saves the profile (nil back,
+no event), Mudlet 5 queues every install behind the save and answers true at
+once, and installing MDW is what starts the save the UI swap lands in a second
+later. Unhandled, the uninstall was refused, the queued install was refused
+over the copy still installed, and the update stopped at "Installing..." with
+nothing said. `mdw.swapPackage` (MDW 0.9.6) checks the package list, retries a
+refused uninstall after 1, 2, 4 and 8 seconds and answers `"retrying"` or
+`"queued"`; `swapNow` then says so and arms the watchdog (`PENDING_WATCHDOG_SECONDS`)
+on a bare timer. The manual-install link REPLACES the package through
+`mdw.swapPackage` while Mudlet still holds the old copy, because an install
+over it is refused. The fix reaches players on older copies of this package
+too: their updater installs the pinned MDW first and then calls ITS swap -
+which is why the pin is 0.9.6.
+
 ## Bootstrapping MDW
 
 Mudlet resolves NO package dependencies - the mfile's `dependencies` field is
@@ -496,9 +515,13 @@ have:
   teardown runs our own `mdw.onTeardown` hook and `killAllTimers` would take
   the pending install with it. Same rule as the package swap, one step more
   lethal.
-- One attempt per session (`mdwui.state.mdwFetchedThisSession`), and every
-  failure path prints `mdwui.mdwUrl` so a player behind a proxy can finish by
-  hand.
+- A refused MDW uninstall is retried before any install is offered: Mudlet
+  refuses while it saves the profile, and an install over the copy it still
+  holds is refused in turn. Same 1, 2, 4, 8 second ladder as `mdw.swapPackage`,
+  on bare timers (see "Lifecycle discipline").
+- One attempt per session per requirement (`mdwui.state.mdwFetchedFor`), and
+  every failure path prints `mdwui.mdwUrl` so a player behind a proxy can
+  finish by hand.
 - Nothing "activates" the UI afterwards: MDW's install runs setup -> onReady
   -> buildUI and this package only ever seeded `mdw.onReady`, so the UI builds
   itself. Do not add an activation call.

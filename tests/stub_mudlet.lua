@@ -439,14 +439,54 @@ function downloadFile(path, url)
   H.downloads[#H.downloads + 1] = { path = path, url = url }
   return true
 end
+-- Mudlet refuses every uninstall while it saves the profile - nil back, no
+-- event - and Mudlet 5 queues every install behind the save, answering true
+-- at once. Installing or removing a package is what starts a save, which is
+-- how an MDW-first update swapped this package into one and stopped halfway.
+-- H.finishSave() ends the save and runs what it queued, as Mudlet's
+-- profileSaveFinished does.
+H.saving = false
+H.queuedInstalls = {}
+H.refusedInstalls = {} -- paths Mudlet turned away: the name was still installed
+local function holds(name)
+  for _, held in ipairs(H.packages) do
+    if held == name then return true end
+  end
+  return false
+end
+-- The package an install file carries: its base name, less the extension and
+-- a trailing "-<version>" (the updater saves WillowdaleMudletUI-X.Y.Z.mpackage,
+-- the bootstrap MDW.mpackage).
+local function packageNameOf(path)
+  local base = tostring(path):match("([^/\\]+)$") or tostring(path)
+  base = base:gsub("%.mpackage$", "")
+  return (base:gsub("%-[%d%.]+$", ""))
+end
 function installPackage(path)
   H.installed[#H.installed + 1] = path
+  if H.saving then
+    H.queuedInstalls[#H.queuedInstalls + 1] = path
+    return true
+  end
+  -- Real Mudlet REFUSES to install over a name it still holds.
+  local name = packageNameOf(path)
+  if holds(name) then
+    H.refusedInstalls[#H.refusedInstalls + 1] = path
+    return nil
+  end
+  H.packages[#H.packages + 1] = name
   -- Real Mudlet RUNS a package's scripts as part of installing it, before this
   -- call returns. Modelling only the record kept the suite from ever seeing
   -- what a package does to itself on the way in - including whether it rebuilds
   -- its own UI. A test sets H.onInstallScripts to supply that.
   if H.onInstallScripts then H.onInstallScripts(path) end
   return true
+end
+function H.finishSave()
+  H.saving = false
+  local queued = H.queuedInstalls
+  H.queuedInstalls = {}
+  for _, path in ipairs(queued) do installPackage(path) end
 end
 function getPackages()
   local out = {}
@@ -457,14 +497,18 @@ function getModulePath(name) return H.modulePaths[name] end
 function reloadModule(name) H.reloaded[#H.reloaded + 1] = name return true end
 function uninstallPackage(name)
   H.uninstalled[#H.uninstalled + 1] = name
-  -- Real Mudlet stops reporting the name from getPackages once it is gone, and
-  -- REFUSES to install over a name it still holds. Modelling only the event and
-  -- not the release is what let a swap that installs too early pass this suite
-  -- while failing in a live client, so the release is modelled here too.
+  if H.saving then return nil end
+  -- Real Mudlet stops reporting the name from getPackages once it is gone.
+  -- Modelling only the event and not the release is what let a swap that
+  -- installs too early pass this suite while failing in a live client, so the
+  -- release is modelled here too. The event is raised whether or not the name
+  -- was listed: the suite never "installs" this package itself, and our own
+  -- cleanup runs inside this call in real Mudlet.
   for i, held in ipairs(H.packages) do
     if held == name then table.remove(H.packages, i) break end
   end
   raiseEvent("sysUninstallPackage", name)
+  return true
 end
 local function cbSet(kind)
   return function(name, fn)

@@ -30,6 +30,10 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+### Fixed
+- An update that also installs a newer MDW no longer stops at "Installing..." halfway through.
+- The manual install link shown after a failed update now replaces the old UI instead of failing.
+
 ## 0.5.5 - 2026-09-24
 
 ### Changed
