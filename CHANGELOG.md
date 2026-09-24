@@ -30,6 +30,8 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+## 0.5.7 - 2026-09-24
+
 ### Changed
 - The top bar's connection clock now reads `00h00m58s`.
 
