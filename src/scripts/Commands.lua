@@ -798,8 +798,8 @@ COMMANDS = {
       -- No size asked for: answer with the height instead of explaining the
       -- syntax. A row that is the wrong size is the one thing this verb is
       -- ever used to investigate, and the share of the window is what makes a
-      -- number meaningful - the first-run defaults are set as fractions, and
-      -- the bottom row of a dock takes whatever the others leave.
+      -- number meaningful - the bottom row of a dock takes whatever the
+      -- others leave.
       if not words[3] then
         local _, winH = getMainWindowSize()
         local pct = (winH or 0) > 0 and math.floor((current / winH) * 100 + 0.5) or 0
@@ -1386,9 +1386,10 @@ COMMANDS = {
 
   { name = "refresh",
     usage = "ui refresh [<what>]",
+    -- The parts are listed from REFRESH_ORDER (less its leading "all"), so a
+    -- part added there cannot go missing here.
     help = "Ask the server for its data again. Bare pulls the whole payload; name a part to pull "
-      .. "just that: character vitals inventory equipment keyring forage affects quests journal "
-      .. "comm room group map.",
+      .. "just that: " .. table.concat(REFRESH_ORDER, " ", 2) .. ".",
     run = function(words)
       if not words[2] then
         mdwui.requestFullPayload()
@@ -1507,7 +1508,7 @@ COMMANDS = {
 
   { name = "update",
     usage = "ui update [install|notes]",
-    help = "Check GitHub for a newer Willowdale UI and offer to install it. The UI checks once "
+    help = "Check for a newer Willowdale UI and offer to install it. The UI checks once "
       .. "on its own, a few seconds after you enter the game; nothing is downloaded until you "
       .. "ask. An offer shows only the newest release's changes - `ui update notes` prints every "
       .. "change since the version you have. `ui update install` takes the offer from the "
@@ -1786,9 +1787,9 @@ local OVERVIEW = {
     { cmd = "reset", link = "reset", opts = "[all] confirm   the default layout (all: settings too)" },
     { cmd = "rebuild", link = "rebuild", opts = "rebuild the UI in place" },
     -- The value is the version the row would replace, which is the one thing
-    -- a player wants to see before asking GitHub anything.
+    -- a player wants to see before asking for a newer one.
     { cmd = "update", link = "update",
-      opts = "[install|notes]   check GitHub for a newer UI, take the offer, or read every change",
+      opts = "[install|notes]   check for a newer UI, take the offer, or read every change",
       value = function() return tostring(mdwui.version) end },
     { cmd = "help", link = "help", opts = "<command>   what one command does" },
   } },

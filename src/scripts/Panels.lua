@@ -139,6 +139,17 @@ function mdwui.renderAffects()
   end
 end
 
+--- Does anything on the panel count down? The 1s ticker repaints only then.
+-- Timed by renderAffects' own rule - not permanent is timed, a missing
+-- duration included - so the ticker and the panel cannot disagree about which
+-- rows move.
+function mdwui.affectsTicking()
+  for _, a in pairs(mdwui.tbl(gmcp and gmcp.Char and gmcp.Char.Affects)) do
+    if type(a) == "table" and (tonumber(a.duration_current) or 0) >= 0 then return true end
+  end
+  return false
+end
+
 ---------------------------------------------------------------------------
 -- GROUP (Group.Info + Group.Vitals)
 -- The web client's roster card (updateGroupPanel + the .grp-* markup),
@@ -263,8 +274,6 @@ function mdwui.renderGroup()
   end
 
   mdw.setWidgetRows("Group", rows)
-  -- Rows carry everything; clear console text a pre-rows version left behind.
-  widget.content:clear()
 end
 
 ---------------------------------------------------------------------------

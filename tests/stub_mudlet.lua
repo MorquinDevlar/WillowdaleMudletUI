@@ -1,4 +1,4 @@
--- Stubbed Mudlet API, just deep enough to load MDW and MDW_UI and drive their
+-- Stubbed Mudlet API, just deep enough to load MDW and this package and drive their
 -- flows headlessly under plain Lua 5.1. Returns a harness table with the
 -- captured side effects (sent commands, GMCP requests, timers, callbacks).
 
@@ -267,11 +267,13 @@ function getScroll(window)
 end
 -- The second argument is Mudlet's echo flag (default true): widget click
 -- affordances pass false so the command they stand for never appears in the
--- main window as if the player had typed it. Recorded alongside the command,
--- so a test can check the silence as well as the text.
+-- main window as if the player had typed it. Recorded at the command's own
+-- index, so a test can check the silence as well as the text: appended, a send
+-- passing no flag stored nil, which does not grow the list, and the check read
+-- the previous command's flag instead.
 function send(cmd, echo)
   H.sent[#H.sent + 1] = cmd
-  H.sentEcho[#H.sentEcho + 1] = echo
+  H.sentEcho[#H.sent] = echo
 end
 function sendGMCP(pkg, payload) H.gmcpSent[#H.gmcpSent + 1] = pkg .. " " .. (payload or "") end
 

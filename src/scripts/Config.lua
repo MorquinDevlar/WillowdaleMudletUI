@@ -109,9 +109,10 @@ mdwui.minMdwVersion = "0.9.4"
 -- thing that ever moves its framework.
 --
 -- MDW's release tooling keeps the tag format (v<version>) and the asset name
--- (MDW.mpackage) as a contract, the same shape as our own releaseUrlFormat
--- below. Verify a tag exists before pinning it: an unpublished version here
--- makes every bootstrap download a GitHub error page instead of a package.
+-- (MDW.mpackage) as a contract - the same kind of contract this package's own
+-- tag and asset names are with the game server (tools/release.sh). Verify a
+-- tag exists before pinning it: an unpublished version here makes every
+-- bootstrap download a GitHub error page instead of a package.
 -- DERIVED, not a second literal: the updater has to be able to fetch an MDW
 -- version this package's own constant does not name. When a release requires a
 -- newer MDW than the one running, the requirement arrives in the feed (the
@@ -122,21 +123,17 @@ mdwui.mdwUrlFormat = "https://github.com/MorquinDevlar/mdw/releases/download/v%s
 mdwui.mdwUrl = string.format(mdwui.mdwUrlFormat, mdwui.minMdwVersion)
 
 -- Where the self-updater (Update.lua) looks. The GAME SERVER hosts both
--- files, and a player's client reads nothing else: a push to this repo's main
--- fires the server's GitHub webhook, which copies build/*.mpackage and
--- releases/releases.json out of the repo into static/resources/ui/. GitHub
--- releases are our own archive, not a distribution channel - nothing
--- player-facing points at them, so the tag scheme is no longer a contract.
+-- files, and a player's client reads nothing else. PUBLISHING A GITHUB RELEASE
+-- IS DEPLOYING, pushing main is not: the server's release handler downloads
+-- the release's two assets into static/resources/ui/, and tools/release.sh is
+-- the only thing that publishes one - so the tag format (vX.Y.Z) and the two
+-- asset names are a contract with that handler.
 --
 -- The package file carries NO version in its name: the server keeps exactly
 -- one copy, the newest, at a fixed path. The version lives in the feed
 -- instead - releases.json, newest entry first, the same shape the mapper
--- package already ships against:
---   [ { "version": "3.0.0", "released": "2026-08-21", "changes": [ "..." ] } ]
---
--- Consequence for the release process: PUSHING MAIN IS DEPLOYING. There is no
--- separate publish step, and tools/release.sh is what keeps build/ and
--- releases/releases.json in step with the version before it pushes.
+-- package already ships against, plus the MDW the newest release requires:
+--   [ { "version": "3.0.0", "released": "2026-08-21", "mdw": "0.9.4", "changes": [ "..." ] } ]
 mdwui.updateBaseUrl = "https://updates.willowdalemud.com/static/resources/ui"
 mdwui.releasesUrl = mdwui.updateBaseUrl .. "/releases.json"
 mdwui.packageUrl = mdwui.updateBaseUrl .. "/" .. mdwui.packageName .. ".mpackage"
@@ -339,7 +336,7 @@ mdwui.config = {
 mdwui.state = mdwui.state or {
   widgets = {},        -- our widget names -> true (for cleanup on uninstall)
   handlers = {},       -- named event handlers we registered (for cleanup)
-  timers = {},         -- repeating timers we own (for cleanup)
+  timers = {},         -- timers we own, one-shots included (for cleanup)
   affectsReceivedAt = 0, -- os.time() when Char.Affects last arrived (local countdown)
   questDetailId = nil, -- quest id whose detail view is showing (nil = list view)
   questExpanded = {},  -- quest id -> true while its objective lines are open;
@@ -363,6 +360,13 @@ mdwui.state = mdwui.state or {
   -- or a move of the reserve. Seeded by setupPromptGauges with what it just
   -- declared, and cleared by the mdw.onTeardown hook with the gauges they
   -- describe.
+  -- promptText / promptConsole (runtime): the prompt bar text last written,
+  -- and the MDW console it went into - so a Vitals push whose prompt reads the
+  -- same skips the rewrite, while the new console every MDW setup creates
+  -- still gets it.
+  -- questsZone / journalZone (runtime): the zone (Room.Info.Basic.area) the
+  -- Quests widget and the quest journal last drew with, so a room step
+  -- repaints them only when it crosses into another zone.
   -- Self-update keys (Update, all runtime): updateBusyAt (os.time() of
   -- the download in flight - a timestamp, so a stalled one goes stale),
   -- updateFeedPath / updateFile / updateUrl (what we asked for, matched

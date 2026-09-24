@@ -1,14 +1,14 @@
--- Generate releases/releases.json from CHANGELOG.md. Usage, from the repo
--- root: lua5.1 tools/changelog_to_releases.lua > releases/releases.json
+-- Generate the release feed (releases.json) from CHANGELOG.md, to stdout.
+-- Usage, from the repo root: lua5.1 tools/changelog_to_releases.lua > releases.json
 --
--- WHY this exists: the game server's deploy webhook copies
--- releases/releases.json out of this repo and serves it at
--- static/resources/ui/releases.json, which is the update feed every installed
--- client reads. CHANGELOG.md stays the ONE place a release note is written,
--- and this turns it into the feed - so the notes a player is shown and the
--- notes in the repo cannot drift apart. tools/release.sh runs it on every
--- release, which means a hand-edited releases.json is overwritten by the next
--- one. That is the point: edit the changelog, never the feed.
+-- WHY this exists: the feed is one of the two assets tools/release.sh attaches
+-- to a GitHub release, and publishing that release is what deploys it - the
+-- game server downloads both assets and serves the feed at
+-- static/resources/ui/releases.json, which every installed client reads.
+-- CHANGELOG.md stays the ONE place a release note is written, and this turns
+-- it into the feed - so the notes a player is shown and the notes in the repo
+-- cannot drift apart. The feed is generated at release time and never
+-- committed: edit the changelog, never the feed.
 --
 -- The heading pattern's digit class is what excludes "## Unreleased", and it
 -- is load-bearing here exactly as it was in the package's own parser: work

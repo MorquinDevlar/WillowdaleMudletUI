@@ -13,9 +13,10 @@ Left dock                      Center            Right dock
   [Character | Combat | Group]
 ```
 
-- **Character** - identity, attributes, wealth, XP, and the game clock/calendar
-- **Combat** - HP/AE/Balance/Enemy gauges, status, and a clickable enemy list
-  (click to target; auto-retargets when your target dies)
+- **Character** - name, level and class, core attributes, the training and
+  stat points you can spend, and the derived combat stats
+- **Combat** - HP/AE/Balance/Enemy gauges, your companion's health, status, and
+  a clickable enemy list (click to target; auto-retargets when your target dies)
 - **Affects** - buffs and states with locally driven countdowns
 - **Equipment / Inventory / Keyring / Forage** - clickable item lists (look,
   use with each item's own verb, drop, remove); worn gear shows its attunement
@@ -80,11 +81,12 @@ ui height <widget> <px|+n|-n>         the height of the row it sits in
 ui scroll [<widget>] up|down|top|bottom [lines]     default 10 lines
 ui read <widget>                      print its text to the main window
 ui font [main|menu|header|prompt|<widget>] [<size>|+n|-n]
+ui font family [<name>]               the UI typeface
 ui theme [<name>|next|prev]           the UI theme (also: ui color)
 
 ui comm [<tab>|clear]                 channel tabs
 ui prompt [<key> [on|off]]            vitals worth hp ae balance enemy
-ui combat [<key> [on|off]]            hp ae balance enemy info
+ui combat [<key> [on|off]]            hp ae balance companion enemy info
 ui music                              what is playing, your playlist, levels
 ui music repeat|shuffle [on|off]      playlist flags
 ui music mode server|playlist         who picks the track
@@ -106,8 +108,8 @@ ui debug [gmcp [<path>]]              UI diagnostics, or dump the GMCP data
                                       (ui debug gmcp Char.Vitals)
 ui reset [all] confirm                back to the default layout
 ui rebuild                            rebuild the UI in place
-ui update [install]                   check GitHub for a newer UI, or take
-                                      the offer without the mouse
+ui update [install|notes]             check for a newer UI, take the offer
+                                      without the mouse, or read every change
 ```
 
 Revealing a widget by keyboard puts it **back where it was** - its old group,

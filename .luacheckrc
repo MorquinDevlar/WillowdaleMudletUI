@@ -1,4 +1,4 @@
--- Luacheck configuration for MDW_UI (WillowdaleMUD UI for Mudlet).
+-- Luacheck configuration for WillowdaleMudletUI (WillowdaleMUD UI for Mudlet).
 -- Mudlet runs Lua 5.1 / LuaJIT and injects a large global API surface.
 
 std = "lua51+luajit"
@@ -67,4 +67,11 @@ ignore = {
 -- else reads, so global warnings (1xx) are noise there.
 files["tests/**/*.lua"] = {
   ignore = { "1" },
+}
+
+-- gmcp is Mudlet's to write everywhere else. Init.lua's Engine.Reset handler
+-- replaces the whole table at a character login, as the game's GMCP guide
+-- prescribes (8.16), and this file alone is allowed to.
+files["src/scripts/Init.lua"] = {
+  globals = { gmcp = { other_fields = true } },
 }

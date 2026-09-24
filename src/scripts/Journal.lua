@@ -77,6 +77,18 @@ local function unescapeBreaks(text)
   return (tostring(text or ""):gsub("\\n", "\n"))
 end
 
+--- Journal prose at `pad`: one wrapped block per source line, blank lines
+-- kept. A book page and a plain entry print the same way.
+local function renderProse(co, C, W, text, pad)
+  for line in (unescapeBreaks(text) .. "\n"):gmatch("([^\n]*)\n") do
+    if line == "" then
+      co:decho("\n")
+    else
+      mdwui.wrapEcho(co, W, C.qjDesc, line, pad)
+    end
+  end
+end
+
 --- Decode a book's JSON document. Guarded on every axis: json_to_value is a
 -- Mudlet global the test harness also provides, but an older Mudlet or a
 -- malformed document must degrade to showing the raw text, never error.
@@ -151,13 +163,7 @@ local function renderBookPages(co, C, W, id, book, pad)
     mdwui.wrapEcho(co, W, C.charHeader, book.title, pad)
   end
   co:decho(string.format("%s<%s><i>page %d of %d</i>\n", pad, C.charLabel, page, #pages))
-  for line in (unescapeBreaks(pages[page]) .. "\n"):gmatch("([^\n]*)\n") do
-    if line == "" then
-      co:decho("\n")
-    else
-      mdwui.wrapEcho(co, W, C.qjDesc, line, pad)
-    end
-  end
+  renderProse(co, C, W, pages[page], pad)
   if #pages > 1 then
     local key = tostring(id)
     if page > 1 then
@@ -221,13 +227,7 @@ local function renderEntryBody(co, C, W, id, pad)
     -- than showing nothing.
     if book and renderBookPages(co, C, W, id, book, pad) then return end
   end
-  for line in (unescapeBreaks(content) .. "\n"):gmatch("([^\n]*)\n") do
-    if line == "" then
-      co:decho("\n")
-    else
-      mdwui.wrapEcho(co, W, C.qjDesc, line, pad)
-    end
-  end
+  renderProse(co, C, W, content, pad)
 end
 
 ---------------------------------------------------------------------------
@@ -297,14 +297,8 @@ function mdwui.renderJournal()
 
   for _, entry in ipairs(entries) do
     local id = entry.id
-    local key = tostring(id)
-    local open = mdwui.state.pjExpanded[key] and true or false
-    co:dechoLink(string.format("<%s>%s", C.charLabel, open and "▼" or "▶"),
-      function()
-        mdwui.state.pjExpanded[key] = (not open) or nil
-        mdwui.renderJournal()
-      end, (open and "Collapse " or "Expand ") .. (entry.title or "this entry"), true)
-    co:decho(" ")
+    local open = mdwui.chevron(co, mdwui.state.pjExpanded, tostring(id), true,
+      entry.title or "this entry", mdwui.renderJournal)
 
     local idText = string.format("[%s]", tostring(entry.index or "?"))
     co:decho(string.format("<%s>%s ", C.charLabel, idText))

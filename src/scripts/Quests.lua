@@ -71,22 +71,6 @@ local function objectiveText(objective)
   return text
 end
 
---- A chevron toggling `stateTable[key]`, or two spaces of reserved width
--- when there is nothing to expand (web parity: names still line up).
-local function chevron(co, C, stateTable, key, expandable, hint, rerender)
-  if not expandable then
-    co:decho("  ")
-    return
-  end
-  local open = stateTable[key] and true or false
-  co:dechoLink(string.format("<%s>%s", C.charLabel, open and "▼" or "▶"),
-    function()
-      stateTable[key] = (not open) or nil
-      rerender()
-    end, (open and "Collapse " or "Expand ") .. hint, true)
-  co:decho(" ")
-end
-
 ---------------------------------------------------------------------------
 -- QUEST DETAIL BODY (shared by both widgets)
 -- Transcribed from the web client's renderQuestDetailInto: the same order
@@ -229,9 +213,7 @@ local function renderQuestEntry(co, C, W, quest, here)
   end
 
   local id = quest.id
-  local key = tostring(id)
-  local expanded = #details > 0 and mdwui.state.questExpanded[key] or false
-  chevron(co, C, mdwui.state.questExpanded, key, #details > 0,
+  local expanded = mdwui.chevron(co, mdwui.state.questExpanded, tostring(id), #details > 0,
     quest.name or "?", mdwui.renderQuests)
 
   local idText = string.format("[%s]", tostring(id))
@@ -276,6 +258,10 @@ function mdwui.renderQuests()
   local widget = mdwui.w("Quests")
   if not widget then return end
   seedState()
+  -- The zone this paint answers to, for onRoomInfoBasic - recorded in the
+  -- detail view too, so a zone change repaints that view once rather than on
+  -- every step until the list is back.
+  mdwui.state.questsZone = currentZone()
   local C = mdwui.config.colors
   local co = widget.content
   local W = mdwui.wrapWidth(widget, 24)
@@ -433,9 +419,11 @@ local function renderFilterBar(co, C, W, active, completed, rumors)
 end
 
 --- A journal row header: chevron, [id], name, an optional right-aligned
--- tail, and (for active quests) the web's track/untrack button.
+-- tail, and (for active quests) the web's track/untrack button. Returns
+-- whether the row is open, as mdwui.chevron does.
 local function journalHeader(co, C, W, opts)
-  chevron(co, C, mdwui.state.journalExpanded, opts.key, true, opts.hint, mdwui.renderJournal)
+  local open = mdwui.chevron(co, mdwui.state.journalExpanded, opts.key, true, opts.hint,
+    mdwui.renderJournal)
   co:decho(string.format("<%s>%s ", opts.color, opts.idText))
 
   local tail = opts.tail or ""
@@ -459,6 +447,7 @@ local function journalHeader(co, C, W, opts)
     co:decho(string.format("<%s>%s", C.charHeader, tail))
   end
   co:decho("\n")
+  return open
 end
 
 --- The expanded block under a quest row: the full detail, fetched lazily on
@@ -480,11 +469,11 @@ end
 -- web client now does it. The caller supplies the clear and the crumb row.
 function mdwui.renderQuestJournalInto(co, C, W)
   seedState()
+  mdwui.state.journalZone = currentZone() -- for onRoomInfoBasic
   local quests = mdwui.tbl(gmcp and gmcp.Char and gmcp.Char.Quests)
   local active = mdwui.tbl(quests.active)
   local completed = mdwui.tbl(completedList(quests))
   local rumors = mdwui.tbl(quests.rumors)
-  local expanded = mdwui.state.journalExpanded
 
   renderFilterBar(co, C, W, active, completed, rumors)
 
@@ -493,9 +482,8 @@ function mdwui.renderQuestJournalInto(co, C, W)
   for _, quest in ipairs(active) do
     local status = quest.ready and "ready" or "active"
     if rowMatches(status, quest.zone, quest.category) then
-      local key = "a:" .. tostring(quest.id)
-      journalHeader(co, C, W, {
-        key = key, hint = quest.name or "?",
+      local open = journalHeader(co, C, W, {
+        key = "a:" .. tostring(quest.id), hint = quest.name or "?",
         idText = string.format("[%s]", tostring(quest.id)),
         color = quest.ready and C.questReady or C.questActive,
         name = quest.name or "?",
@@ -503,7 +491,7 @@ function mdwui.renderQuestJournalInto(co, C, W)
         verb = quest.tracked and "untrack" or "track",
         questId = quest.id,
       })
-      if expanded[key] then renderRowDetail(co, C, W, quest.id) end
+      if open then renderRowDetail(co, C, W, quest.id) end
       shown = shown + 1
     end
   end
@@ -512,12 +500,11 @@ function mdwui.renderQuestJournalInto(co, C, W)
     if rowMatches("rumor", rumor.zone, "") then
       -- Masked rows (guide 8.25): no id, so the web shows "[  ?]" and the
       -- detail is the attribution line rather than a GMCP pull.
-      local key = "r:" .. tostring(rumor.text or "")
-      journalHeader(co, C, W, {
-        key = key, hint = "this rumor", idText = "[?]",
+      local open = journalHeader(co, C, W, {
+        key = "r:" .. tostring(rumor.text or ""), hint = "this rumor", idText = "[?]",
         color = C.questRumor, name = rumor.text or "",
       })
-      if expanded[key] then
+      if open then
         mdwui.wrapEcho(co, W, C.faint, string.format("Heard from %s%s", rumor.source_text or "?",
           (rumor.zone and rumor.zone ~= "") and (" | " .. rumor.zone) or ""), "  ", "i")
       end
@@ -527,15 +514,14 @@ function mdwui.renderQuestJournalInto(co, C, W)
 
   for _, quest in ipairs(completed) do
     if rowMatches("done", "", quest.category) then
-      local key = "d:" .. tostring(quest.id)
       local count = tonumber(quest.count) or 1
-      journalHeader(co, C, W, {
-        key = key, hint = quest.name or "?",
+      local open = journalHeader(co, C, W, {
+        key = "d:" .. tostring(quest.id), hint = quest.name or "?",
         idText = string.format("[%s]", tostring(quest.id)),
         color = C.questDone, name = quest.name or "?",
         tail = count > 1 and ("completed x" .. tostring(count)) or "completed",
       })
-      if expanded[key] then renderRowDetail(co, C, W, quest.id) end
+      if open then renderRowDetail(co, C, W, quest.id) end
       shown = shown + 1
     end
   end
@@ -571,6 +557,23 @@ function mdwui.onQuestDetail()
   end
   if mdwui.state.questDetailId then mdwui.renderQuests() end
   mdwui.renderJournal()
+end
+
+--- Room.Info.Basic arrives on every step, and all these widgets read from it
+-- is the zone - which most steps do not change. So each repaints only when the
+-- zone differs from the one it last DREW with: recorded by the renders, not by
+-- this handler, so a repaint driven by anything else (a quest push, a filter
+-- click) keeps the comparison honest.
+function mdwui.onRoomInfoBasic()
+  seedState()
+  local zone = currentZone()
+  if zone ~= mdwui.state.questsZone then mdwui.renderQuests() end
+  -- The journal reads the zone only under its "Current zone" filter, on the
+  -- Quests category; every other view looks the same wherever the player is.
+  if mdwui.state.pjCategory == "quests" and mdwui.state.journalFilters.zone == "current"
+    and zone ~= mdwui.state.journalZone then
+    mdwui.renderJournal()
+  end
 end
 
 --- A character switch mid-session invalidates every quest cache: the

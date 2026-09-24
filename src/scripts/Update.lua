@@ -1,34 +1,32 @@
 --[[
   Update.lua
-  The package's self-update: read our own CHANGELOG.md from GitHub, say when
-  a newer release exists, and swap the package on the player's word. And, at
-  the bottom, the same machinery pointed at MDW: the bootstrap that installs
-  the framework this package cannot run without.
+  The package's self-update: read the release feed the game server hosts,
+  say when a newer release exists, and swap the package on the player's word.
+  And, at the bottom, the same machinery pointed at MDW: the bootstrap that
+  installs the framework this package cannot run without.
 
-  The feed IS the changelog. There is no releases.json and no manifest: the
-  file the repo already keeps (Keep a Changelog, newest release first) is the
-  only thing fetched, and no URL ever travels in it. The download URL is
-  CONVENTION - tag vX.Y.Z, asset named after the package - built from the
-  constants in Config.lua, which tools/release.sh is bound by too.
-  A feed that cannot name a URL cannot point an installer anywhere else.
+  The feed is releases.json, generated from CHANGELOG.md at release time and
+  deployed with the package by publishing a GitHub release (tools/release.sh).
+  No URL ever travels in it: the package comes from ONE fixed path beside the
+  feed (Config.lua), so a feed cannot point an installer anywhere else.
 
-  Nothing is periodic. The check runs once per session from mdwui.buildUI()
-  and on demand from `ui update`; a timer polling GitHub all evening would
-  buy nothing a login and a command do not.
+  Nothing is periodic. The check runs once per session, armed by the first
+  Char.Info (scheduleUpdateCheck), and on demand from `ui update`; a timer
+  polling all evening would buy nothing a login and a command do not.
 
   The install ORDER is the point of the whole module: download, verify, and
-  only then uninstall. A player whose download was a GitHub error page must
-  still have a working UI, so nothing is removed until the replacement is on
-  disk and starts with a zip's "PK". The watchdog is the second half of that
+  only then uninstall. A player whose download was an error page must still
+  have a working UI, so nothing is removed until the replacement is on disk
+  and starts with a zip's "PK". The watchdog is the second half of that
   promise - if the reinstall never reports back, the saved file is handed
   over with a one-click install rather than left as a dead end.
 
   Output goes to the MAIN console with Mudlet's NAMED colours, the same
   reasoning as Commands.lua: an update offer has to survive whatever
   the player has hidden or closed, and this text is literal English rather
-  than a transcription of the web client's CSS. Changelog text is REMOTE text, so every line of it goes
-  through plain() before it is echoed - "<b>" in a bullet must print, not
-  paint.
+  than a transcription of the web client's CSS. Feed text is REMOTE text, so
+  every line of it goes through plain() before it is echoed - "<b>" in a
+  bullet must print, not paint.
 
   Dependencies: Config.lua (the release constants and the MDW pin),
   Core.lua (versionAtLeast, mdwSatisfied, addTimer). Its event handlers
@@ -53,11 +51,6 @@ local AFTER_LOGIN_SECONDS = 10
 -- Smaller than any build this package has ever produced, so a 404 page or a
 -- truncated transfer fails the check without a checksum to maintain.
 local MIN_PACKAGE_BYTES = 20000
--- How the swap waits for Mudlet to let go of a package name. Fine-grained, so
--- a client that is ready pays nothing and a slow teardown costs only what it
--- actually needs - but the WINDOW has to be generous, because the teardown is
--- not ours to hurry: it destroys thirteen widgets, runs MDW's teardown hook
--- and can take a profile save with it.
 -- The wait between uninstalling the old package and installing the new one.
 -- One second, because that is what the mapper package and the old UI both do
 -- and both have always worked:
@@ -88,7 +81,6 @@ local P = {
   -- change colour with the message.
   banner = "magenta",
   head = "cyan",        -- version headings
-  label = "gold",       -- the Added/Changed/Fixed sub-headings
   text = "grey",        -- bullets and body text
   name = "white",       -- the installed version
   good = "green",       -- the version on offer
@@ -108,7 +100,7 @@ local function line(text)
 end
 
 ---------------------------------------------------------------------------
--- THE FEED (Keep a Changelog, newest release first)
+-- THE FEED (releases.json, newest release first)
 ---------------------------------------------------------------------------
 
 --- Inline markdown a bullet can carry. Stripped rather than rendered: Mudlet
@@ -119,21 +111,19 @@ local function inline(text)
 end
 
 --- Parse the server's releases.json into an ordered list of releases, newest
--- first: { version = "3.0.0", date = "2026-08-21", notes = { {kind, text} } }.
--- The shape is the game server's, copied verbatim out of releases/releases.json
--- on every push to main, and it is the one the mapper package already ships
--- against: [ { version, released, changes = { "line", ... } } ].
+-- first: { version = "3.0.0", date = "2026-08-21", mdw = "0.9.4",
+-- notes = { "line", ... } }. The shape is the game server's, generated from
+-- CHANGELOG.md and deployed with each release (tools/release.sh), and it is
+-- the one the mapper package already ships against:
+-- [ { version, released, mdw, changes = { "line", ... } } ].
 --
 -- Every entry is defensive because this is REMOTE text: a feed that is not an
 -- array, an entry with no version, a changes list that is not a list - each is
 -- skipped rather than thrown, since the alternative is an error inside a
--- download handler and a player with no update path at all. The `notes` shape
--- is kept identical to what the old changelog parser produced so the
--- presentation layer below did not have to change: `kind` is always "bullet"
--- here, because a JSON feed has no sub-headings to label.
+-- download handler and a player with no update path at all.
 --
--- inline() strips markdown from every line for the same reason it always did -
--- these strings are prose we do not control.
+-- inline() strips markdown from every line: these strings are prose we do not
+-- control.
 function mdwui.parseReleases(text)
   if type(text) ~= "string" or text == "" then return {} end
   -- json_to_value is the decoder this package already reads book documents
@@ -158,7 +148,7 @@ function mdwui.parseReleases(text)
       if type(entry.changes) == "table" then
         for _, change in ipairs(entry.changes) do
           if type(change) == "string" or type(change) == "number" then
-            release.notes[#release.notes + 1] = { kind = "bullet", text = inline(tostring(change)) }
+            release.notes[#release.notes + 1] = inline(tostring(change))
           end
         end
       end
@@ -200,16 +190,7 @@ local function noteLines(list, headings)
         release.date and string.format(" <%s>- %s", P.dim, plain(release.date)) or "")
     end
     for _, note in ipairs(release.notes) do
-      if note.kind == "head" then
-        out[#out + 1] = string.format("    <%s>%s", P.label, plain(note.text))
-      elseif note.kind == "bullet" then
-        out[#out + 1] = string.format("      <%s>- %s", P.text, plain(note.text))
-      else
-        -- A changelog wraps its own bullets, so an unlabelled line is nearly
-        -- always the rest of the one above it: same colour, indented under
-        -- the bullet's text rather than under its dash.
-        out[#out + 1] = string.format("        <%s>%s", P.text, plain(note.text))
-      end
+      out[#out + 1] = string.format("      <%s>- %s", P.text, plain(note))
     end
   end
   return out
@@ -390,8 +371,8 @@ end
 ---------------------------------------------------------------------------
 
 --- Fetch the package the server is hosting. The URL is FIXED, not built from
--- the version: the server keeps exactly one copy at one path, replaced by the
--- webhook on every push to main. The version the feed offered is still carried
+-- the version: the server keeps exactly one copy at one path, replaced each
+-- time a release is published. The version the feed offered is still carried
 -- through - it names the download and the message - but it does not select
 -- what arrives, so a feed and a package can never disagree about the path.
 function mdwui.installUpdate()
@@ -437,8 +418,9 @@ function mdwui.installUpdate()
 end
 
 --- Is the downloaded file actually this package? It must open, be too big to
--- be an error page, and start with "PK" - an mpackage is a zip. GitHub
--- answers a tag that does not exist with a short HTML page, which is neither.
+-- be an error page, and start with "PK" - an mpackage is a zip. A missing file
+-- or a tag that does not exist comes back as a short HTML page, which is
+-- neither.
 -- @return true, or false plus what was wrong with it
 local function verified(path)
   local fh = io.open(path, "rb")
@@ -702,8 +684,8 @@ function mdwui.ensureMdw()
   if mdwui.state.mdwFetchedFor == needed then return false end
   -- The updater and the bootstrap share one downloader guard so neither can
   -- land on the other's file. The overlap is nearly impossible in practice -
-  -- the update check starts from buildUI, which the version gate turns back
-  -- long before that - but the two do write to the same profile directory.
+  -- the update check waits for the first Char.Info and ten seconds more - but
+  -- the two do write to the same profile directory.
   if busy() then return false end
   -- Set before the downloader check, not after it: a Mudlet with no
   -- downloadFile will not grow one mid-session, so that line is worth saying
@@ -849,7 +831,7 @@ function mdwui.onDownloadError(_, errorMessage, savedPath)
   mdwui.state.updateBusyAt = nil
   mdwui.state.updateManual = false
   mdwui.say(string.format("%s download failed: %s",
-    isFeed and "Changelog" or "Update", plain(errorMessage or "unknown error")))
+    isFeed and "Release list" or "Update", plain(errorMessage or "unknown error")))
   line(string.format("  <%s>%s", P.dim,
     plain(isFeed and mdwui.releasesUrl or (mdwui.state.updateUrl or ""))))
 end

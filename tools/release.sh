@@ -161,9 +161,9 @@ awk -v heading="$heading" '
     { print }
 ' CHANGELOG.md >"$tmpdir/CHANGELOG.md"
 mv "$tmpdir/CHANGELOG.md" CHANGELOG.md
-# The section body, minus leading and trailing blank lines, is the release
-# note - both on GitHub and in the updater's "what changed" prompt, which
-# parses this same heading out of the raw file on main.
+# The section body, minus leading and trailing blank lines, is the GitHub
+# release note. The updater's "what changed" prompt shows the same section,
+# through the feed generated below.
 awk -v heading="$heading" '
     $0 == heading { inside = 1; next }
     inside && /^## / { exit }
@@ -207,8 +207,6 @@ git commit -m "Release $version"
 step "Tagging $tag"
 git tag -a "$tag" -m "WillowdaleMUD UI $version"
 
-# main goes up before the release exists, so the CHANGELOG the updater fetches
-# raw from main already carries the section for the version it is about to see.
 # The push is NOT the deploy - publishing the release below is. Main goes up
 # first so the tag it carries exists before the release references it.
 step "Pushing to origin"

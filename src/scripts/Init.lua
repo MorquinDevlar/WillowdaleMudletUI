@@ -326,9 +326,6 @@ function mdwui.buildUI()
     -- journal's categories plus a Quests category carrying the quest journal
     -- (see Journal.lua). The Quests widget above stays lean.
     { "Journal", mdwui.renderJournal, { dock = "right" } },
-    -- Ambient music: the catalog, the playlist, and the volume levels
-    -- (guide 5.16). It needs no request of its own - both its packages ride
-    -- the full payload buildUI already asks for.
     -- What the session costs on the wire (guide 5.17). CLOSED on a first
     -- run - see below - so it is the one widget here whose default is not to
     -- be there: it answers a question a player asks occasionally, and the
@@ -369,31 +366,21 @@ function mdwui.buildUI()
   -- Default grouping (first run only - see defaultGroup). Order builds the
   -- left dock top-to-bottom; the last group in each dock auto-fills.
   --
-  -- Heights are a FRACTION of the window, not pixels, because the web client
-  -- sizes this dock by percentage (Affects 25%, items 50%, character 25% -
-  -- dockview-widgets.js) and a pixel count cannot express that. The items
-  -- group gets by far the most: an inventory is a LIST, and the one thing a
-  -- player wants from it on a first run is to see all of it without
-  -- scrolling, while Affects is a handful of timers that never needed the
-  -- 180px it used to hold.
+  -- Heights are measured ROWS (heightForRows), not a fraction of the window:
+  -- Affects gets a handful of timer lines, the items group a whole equipment
+  -- loadout (equipmentRows) before an inventory is counted - a console with
+  -- more content than height scrolls to the BOTTOM, so being short by two
+  -- lines hides the Weapons header rather than the tail.
   --
-  -- Proportional also because MDWUI_Char below is MDW's FILL row - it absorbs
-  -- whatever these two do not claim, and its budget clamps at zero
-  -- (reorganizeDock's fillRowBudget). A fixed height large enough to show a
-  -- full inventory on a big screen would therefore collapse the character
-  -- group entirely on a laptop, silently. Scaling both keeps the ratio
-  -- wherever the window lands.
+  -- MDW auto-fills the LAST row of a dock (reorganizeDock's autoFill), which
+  -- here is MDWUI_Char - so every pixel these two do not claim goes to
+  -- Character/Combat/Group, whose content is a dozen fixed lines. The fill
+  -- row's budget clamps at zero (reorganizeDock's fillRowBudget), which is why
+  -- defaultHeight caps each claim at a share of the window: a claim sized for a
+  -- big screen would otherwise collapse the character group on a laptop.
   --
   -- All first-run only: defaultGroup skips any widget whose placement a saved
   -- layout already owns.
-  -- MDW auto-fills the LAST row of a dock (reorganizeDock's autoFill), which
-  -- here is MDWUI_Char - so every pixel these two do not claim goes to
-  -- Character/Combat/Group, whose content is a dozen fixed lines. Claiming
-  -- generously for the items group is therefore how the slack reaches the
-  -- widget that can use it: a full equipment loadout is sixteen lines before
-  -- an inventory is counted, and a console with more content than height
-  -- scrolls to the BOTTOM, so being short by two lines hides the Weapons
-  -- header rather than the tail.
   local statusStack = defaultGroup({ "Affects", "Keyring" }, "MDWUI_Status", "left", created)
   local itemsStack = defaultGroup({ "Equipment", "Inventory", "Forage" }, "MDWUI_Items", "left", created)
   defaultGroup({ "Character", "Combat", "Group" }, "MDWUI_Char", "left", created)
@@ -425,8 +412,8 @@ function mdwui.buildUI()
 
   -- Numpad walking. Not a widget, but this is the first point where the
   -- player's saved choice exists: MDW restores mdw.gameSettings in
-  -- loadLayout, one step before it runs these callbacks. Idempotent by
-  -- kill-then-bind, like the ticker below.
+  -- loadLayout, one step before it runs these callbacks. Idempotent: it only
+  -- enables or disables the native key folder.
   mdwui.applyNumpadKeys()
   -- Guarded like every cross-module call at build time; one line, once per
   -- session (announceCommands remembers).
@@ -499,12 +486,13 @@ function mdwui.buildUI()
   mdwui.request("Client.Map")
 
   -- Affects countdowns are driven locally (no per-second push from the
-  -- server), so a 1s ticker repaints the panel while durations run down. The
+  -- server), so a 1s ticker repaints the panel while durations run down - and
+  -- only then: permanent affects, or none, read the same every second. The
   -- top bar rides along: its connection clock ticks on the same beat. Resizes
   -- are NOT this timer's job - the bar's reflow callback repaints it as MDW
   -- lays it out - but the clock still needs a beat of its own.
   local tid = tempTimer(1, function()
-    mdwui.renderAffects()
+    if mdwui.affectsTicking() then mdwui.renderAffects() end
     mdwui.renderTopBar()
   end, true)
   if tid then mdwui.addTimer(tid) end
@@ -595,13 +583,10 @@ local handlers = {
   ["gmcp.Char.Quests"] = function() mdwui.onQuests() end,
   ["gmcp.Char.Quest.Detail"] = function() mdwui.onQuestDetail() end,
   -- The Quests widget's Here section and the Journal's "Current zone" filter
-  -- are both keyed on the current zone, so a room change repaints them (the
-  -- web client re-renders updateQuestsPanel from its Room.Info handler).
-  -- Cheap pure repaints, same as the affects ticker.
-  ["gmcp.Room.Info.Basic"] = function()
-    mdwui.renderQuests()
-    mdwui.renderJournal()
-  end,
+  -- are both keyed on the current zone (the web client re-renders
+  -- updateQuestsPanel from its Room.Info handler). This arrives on EVERY step,
+  -- so the handler repaints only what crossing into another zone changes.
+  ["gmcp.Room.Info.Basic"] = function() mdwui.onRoomInfoBasic() end,
 
   -- Music (guide 5.16). The catalog is static for the session and the
   -- settings arrive after every change, from this client or any other. The
@@ -630,6 +615,19 @@ local handlers = {
   -- Server hot-reload: cached state may be stale - re-request everything
   -- (guide 8.15).
   ["gmcp.Engine.Copyover"] = function() mdwui.requestFullPayload() end,
+  -- A new character session on this connection (guide 8.16): the first packet
+  -- of every login, ahead of the character's own data. Mudlet's gmcp table
+  -- outlives a logout, and combat and balance are only pushed during a fight -
+  -- so a character that logged out mid-fight would hand its enemies, its target
+  -- and its drained balance to the next one. Wiped WHOLE, as the guide
+  -- prescribes and the web client's Engine.Reset handler does: the new
+  -- character's data arrives right behind this, and the combat state is the
+  -- one thing no push of theirs would clear. The one place this package writes
+  -- to gmcp (.luacheckrc says so for this file alone).
+  ["gmcp.Engine.Reset"] = function()
+    gmcp = {}
+    mdwui.setInCombat(false)
+  end,
 
   -- Start of the top bar's connection timer: each (re)connection restarts it.
   ["sysConnectionEvent"] = function()

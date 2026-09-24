@@ -99,14 +99,23 @@ function mdwui.titleCase(s)
   return (tostring(s):gsub("%f[%a]%a", string.upper))
 end
 
---- HP-style gauge color for a percentage, using the web client's thresholds.
-function mdwui.healthColor(cur, max)
-  local c = mdwui.config
+--- One of three colors by the web client's HP bands (low <= hpLowPct, mid <=
+-- hpMidPct). The text and the gauge fills each pass their own palette, so
+-- the band edges live in one place and the two surfaces cannot disagree
+-- about where a band starts.
+local function hpBandColor(cur, max, low, mid, high)
+  local cfg = mdwui.config
   cur, max = tonumber(cur) or 0, tonumber(max) or 0
   local pct = (max > 0) and (cur / max) or 0
-  if pct <= c.hpLowPct then return c.colors.bad end
-  if pct <= c.hpMidPct then return c.colors.warn end
-  return c.colors.good
+  if pct <= cfg.hpLowPct then return low end
+  if pct <= cfg.hpMidPct then return mid end
+  return high
+end
+
+--- HP-style text color (a decho triplet) for a value.
+function mdwui.healthColor(cur, max)
+  local C = mdwui.config.colors
+  return hpBandColor(cur, max, C.bad, C.warn, C.good)
 end
 
 ---------------------------------------------------------------------------
@@ -122,14 +131,10 @@ function mdwui.trackCss(color)
   return string.format("background-color: %s; %s", color, mdwui.config.gauges.frame)
 end
 
---- HP fill color, shifting amber/red at the web-client thresholds.
+--- HP fill color, shifting amber/red at the same bands as the text.
 function mdwui.hpFillColor(cur, max)
-  local cfg = mdwui.config
-  cur, max = tonumber(cur) or 0, tonumber(max) or 0
-  local pct = (max > 0) and (cur / max) or 0
-  if pct <= cfg.hpLowPct then return cfg.gauges.hpFillLow end
-  if pct <= cfg.hpMidPct then return cfg.gauges.hpFillMid end
-  return cfg.gauges.hpFill
+  local g = mdwui.config.gauges
+  return hpBandColor(cur, max, g.hpFillLow, g.hpFillMid, g.hpFill)
 end
 
 --- The AE gauge as both surfaces draw it: the value the FILL takes, the TRUE
@@ -265,6 +270,25 @@ function mdwui.link(console, dechoText, command, hint)
   console:dechoLink(dechoText, function() send(command, false) end, hint or command, true)
 end
 
+--- An expand/collapse arrow toggling `stateTable[key]` and repainting through
+-- `rerender`, or two spaces of reserved width when there is nothing to expand
+-- (web parity: names still line up). Returns whether the row is open, so the
+-- body under the arrow is drawn from the same state the arrow was.
+function mdwui.chevron(co, stateTable, key, expandable, hint, rerender)
+  if not expandable then
+    co:decho("  ")
+    return false
+  end
+  local open = stateTable[key] and true or false
+  co:dechoLink(string.format("<%s>%s", mdwui.config.colors.charLabel, open and "▼" or "▶"),
+    function()
+      stateTable[key] = (not open) or nil
+      rerender()
+    end, (open and "Collapse " or "Expand ") .. hint, true)
+  co:decho(" ")
+  return open
+end
+
 --- True while the current room is a shop (Room.Info.Basic.environment,
 -- guide 5.14) - gates the item menus' Sell row. tbl-guarded per field: the
 -- Room packages carry the same nil-marshaling history as the Char ones.
@@ -324,7 +348,8 @@ function mdwui.bindRenderer(widget, renderFn)
   widget.reflow = function()
     local ok, err = pcall(renderFn)
     if not ok and mdw and mdw.debugEcho then
-      mdw.debugEcho("MDW_UI render error: %s", tostring(err))
+      mdw.debugEcho("%s render error in %s: %s", mdwui.packageName,
+        tostring(widget.name), tostring(err))
     end
   end
   -- These reflows are cheap pure repaints, not echo-buffer replays, so MDW

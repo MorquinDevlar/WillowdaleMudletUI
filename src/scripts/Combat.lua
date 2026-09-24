@@ -31,8 +31,9 @@ local function bringToFront(name)
 end
 
 --- Combat can end two ways (guide 8.17): Char.Combat.Ended, or Status with
--- in_combat:false. Both funnel here; the stale per-beat payloads in the gmcp
--- table must not keep painting a fight that is over, hence the local flag.
+-- in_combat:false. Both funnel here, as does a new character session
+-- (Engine.Reset); the stale per-beat payloads in the gmcp table must not keep
+-- painting a fight that is over, hence the local flag.
 function mdwui.setInCombat(flag)
   flag = flag and true or false
   local was = mdwui.state.inCombat and true or false
@@ -68,9 +69,9 @@ end
 -- panel reads these same rows - and it names no owner, so every companion
 -- present is drawn rather than one guessed to be the player's: in a party of
 -- two shamans, picking the first would put someone else's beast under the
--- player's own gauges. Two consequences worth knowing: a player outside a
--- group is sent no Group.Vitals at all, so a solo companion has nothing to
--- draw from, and the list empties the moment the group does.
+-- player's own gauges. A player outside a group is still sent Group.Vitals
+-- listing their own charmed creatures (guide 5.19), so a solo companion draws
+-- here too.
 local function companionVitals()
   local companions = {}
   for _, v in ipairs(mdwui.tbl(((gmcp and gmcp.Group) or {}).Vitals)) do
@@ -196,9 +197,6 @@ function mdwui.renderCombat()
   end
 
   mdw.setWidgetRows("Combat", rows)
-  -- Everything lives in the rows; clear any console text a pre-rows version
-  -- of this package left behind (mid-session package updates reuse widgets).
-  widget.content:clear()
 end
 
 --- Auto-target is a CLIENT behaviour the server will not do for us (guide
@@ -219,7 +217,9 @@ function mdwui.onCombatEnemies()
       if enemy.id == target.id then present = true break end
     end
     if not present then
-      send("target #" .. tostring(enemies[1].id))
+      -- Silent like every click affordance (mdwui.link): the player typed none
+      -- of this, and the game still answers with the new target.
+      send("target #" .. tostring(enemies[1].id), false)
     end
   end
 end
@@ -262,10 +262,7 @@ local function combatMenuItems()
 end
 
 -- Declared here rather than at widget creation because a widget menu dies
--- with its widget, so it has to be re-declared on every build. The Music
--- widget carries no menu: it is laid out like the web client's panel, which
--- has no button (Repeat and Shuffle are boxes in the panel itself; next, stop
--- and the mode are `ui music` verbs).
+-- with its widget, so it has to be re-declared on every build.
 function mdwui.setupWidgetMenus()
   if not (mdw and mdw.setWidgetMenu) then return end
   mdw.setWidgetMenu("Combat", combatMenuItems, "Combat")
@@ -301,10 +298,19 @@ function mdwui.updatePromptBar()
   if s.worth and vitals.prompt2 and vitals.prompt2 ~= "" then
     parts[#parts + 1] = mdwui.ansiToDecho(vitals.prompt2)
   end
-  if #parts == 0 then
-    if mdw.clearPrompt then mdw.clearPrompt() end
-  else
-    mdw.setPrompt(table.concat(parts, "\n"))
+  -- Vitals arrives up to ten times a second and the lines it carries mostly
+  -- read the same, so a prompt the console already shows is not cleared and
+  -- echoed again. Keyed on the console as well as the text: MDW creates a new
+  -- one on every setup, and a memo that outlived its console would leave the
+  -- new one blank until the prompt next changed.
+  local text = table.concat(parts, "\n")
+  if text ~= mdwui.state.promptText or mdw.promptBar ~= mdwui.state.promptConsole then
+    mdwui.state.promptText, mdwui.state.promptConsole = text, mdw.promptBar
+    if #parts == 0 then
+      if mdw.clearPrompt then mdw.clearPrompt() end
+    else
+      mdw.setPrompt(text)
+    end
   end
   return #parts
 end
@@ -395,13 +401,14 @@ function mdwui.onBalance()
   mdwui.renderCombat()
 end
 
---- Char.Vitals feeds four surfaces at once (rate-limited server-side to
--- one push per 100ms, so this stays cheap enough).
+--- Char.Vitals feeds three surfaces at once (rate-limited server-side to one
+-- push per 100ms). Not the Character panel: it draws no pool - HP and AE are
+-- the prompt layer's there and here alike - so a repaint per push would only
+-- redraw what Info, Attributes and Worth already drew.
 function mdwui.onVitals()
   mdwui.updatePromptBar()
   mdwui.updatePromptGauges()
   mdwui.renderCombat()
-  mdwui.renderCharacter()
 end
 
 ---------------------------------------------------------------------------

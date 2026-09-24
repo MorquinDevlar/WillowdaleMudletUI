@@ -1,4 +1,4 @@
--- MDW_UI smoke suite: loads MDW (sibling checkout or $MDW_SRC) and this
+-- WillowdaleMudletUI smoke suite: loads MDW (sibling checkout or $MDW_SRC) and this
 -- package against the stubbed Mudlet API, then drives the layout build and
 -- every GMCP-fed surface with fixture payloads. Run from the repo root:
 --   lua5.1 tests/smoke.lua
@@ -365,6 +365,13 @@ check(charPlain:find("Armor%s+12%s+Martial Pwr%s+18")
   and charPlain:find("Warding%s+3%s+Resilience%s+4"), "derived-stat grid matches the web client")
 check(not charPlain:find("1,234") and not charPlain:find("HP") and not charPlain:find("12:34"),
   "gold, vitals and the clock stay out of the Character panel (prompt layer/toolbar data)")
+-- ...so a Vitals push, up to ten a second, has nothing to repaint there.
+do
+  local charClears = mdw.widgets["Character"].content._clears or 0
+  raiseEvent("gmcp.Char.Vitals")
+  check((mdw.widgets["Character"].content._clears or 0) == charClears,
+    "a Vitals push leaves the Character panel alone")
+end
 check(mdwui.fmtNum(1234) == "1,234", "fmtNum groups thousands")
 
 -- Top bar: identity from Char.Info plus the connection timer on the left,
@@ -454,6 +461,20 @@ check(joined(mdw.promptBar):find("carrying 4/20", 1, true) ~= nil,
   "worth line (prompt2) drives the prompt bar")
 check(joined(mdw.promptBar):find("HP:80 AE:45>", 1, true) == nil,
   "vitals prompt line hidden by default like the web client")
+-- Vitals arrives up to ten times a second and the prompt it carries mostly
+-- reads the same: an unchanged prompt is not cleared and echoed again.
+do
+  local promptClears = mdw.promptBar._clears or 0
+  raiseEvent("gmcp.Char.Vitals")
+  check((mdw.promptBar._clears or 0) == promptClears, "an unchanged prompt is not rewritten")
+  gmcp.Char.Vitals.prompt2 = "carrying 5/20"
+  raiseEvent("gmcp.Char.Vitals")
+  check((mdw.promptBar._clears or 0) == promptClears + 1
+    and joined(mdw.promptBar):find("carrying 5/20", 1, true) ~= nil,
+    "a changed one is")
+  gmcp.Char.Vitals.prompt2 = "carrying 4/20"
+  raiseEvent("gmcp.Char.Vitals")
+end
 
 -- 4a. Prompt layer: the web client's default gauge set (hp/ae/balance; the
 -- enemy bar stays in the Combat widget) tracks Vitals and Balance, with the
@@ -468,6 +489,15 @@ gmcp.Char.Vitals.health = 20
 raiseEvent("gmcp.Char.Vitals")
 check(mdw.promptGauges.hp.front._css:find("220,60,50", 1, true) ~= nil,
   "low HP shifts the fill red at the web-client threshold")
+-- The prompt text and the gauge fills band at the same edges: one helper picks
+-- the band, and each surface brings its own palette.
+check(mdwui.healthColor(20, 100) == mdwui.config.colors.bad
+  and mdwui.hpFillColor(20, 100) == mdwui.config.gauges.hpFillLow
+  and mdwui.healthColor(50, 100) == mdwui.config.colors.warn
+  and mdwui.hpFillColor(50, 100) == mdwui.config.gauges.hpFillMid
+  and mdwui.healthColor(80, 100) == mdwui.config.colors.good
+  and mdwui.hpFillColor(80, 100) == mdwui.config.gauges.hpFill,
+  "the HP text and the gauge fills change band at the same edges")
 gmcp.Char.Vitals.health = 80
 raiseEvent("gmcp.Char.Vitals")
 -- The bound slice of the aether pool (guide 5.1 `aether_reserved`, web
@@ -573,6 +603,28 @@ do
     and affText:find("<" .. mdwui.config.colors.charHeader .. ">2:00", 1, true),
     "a permanent duration is faint and italic, a running one parchment")
 end
+-- The 1s ticker repaints the panel only while something counts down: a panel
+-- of permanent affects, or none, reads the same every second. Fired in place,
+-- like the top bar's check above.
+do
+  local affConsole = mdw.widgets["Affects"].content
+  local fixture = gmcp.Char.Affects
+  local function tick()
+    for _, id in ipairs(mdwui.state.timers) do
+      if H.timers[id] then H.timers[id]() end
+    end
+  end
+  gmcp.Char.Affects = { Regen = fixture.Regen }
+  raiseEvent("gmcp.Char.Affects")
+  local clears = affConsole._clears or 0
+  tick()
+  check((affConsole._clears or 0) == clears, "the 1s ticker leaves a panel of permanent affects alone")
+  gmcp.Char.Affects = fixture
+  raiseEvent("gmcp.Char.Affects")
+  clears = affConsole._clears or 0
+  tick()
+  check((affConsole._clears or 0) == clears + 1, "and repaints one with a duration counting down")
+end
 
 -- Equipment: the web client's sectioned panel (updateEquipSlot + the
 -- .eq-section markup) - gold slot labels, teal names with [C][E][Q] flags,
@@ -662,7 +714,7 @@ check(H.labels["MDW_ContextMenuTitle"] ~= nil
   and H.labels["MDW_ContextMenuTitle"]._echoed[1]:find("iron sword", 1, true) ~= nil,
   "clicking an item opens its context menu")
 H.callbacks["MDW_ContextMenuItem1"].click()
-check(H.sent[#H.sent] == "remove weapon" and H.sentEcho[#H.sentEcho] == false,
+check(H.sent[#H.sent] == "remove weapon" and H.sentEcho[#H.sent] == false,
   "menu Remove sends the slot command, silently like every click affordance")
 check(mdw.menus.context == false and H.labels["MDW_ContextMenuItem1"] == nil,
   "context menu closes after acting")
@@ -858,10 +910,20 @@ check(combat._rows["bar_5"].el._value == 30
   and combat._rows["bar_5"].el.text._echoed[1]:find("a goblin 30/40", 1, true) ~= nil,
   "enemy health bars carry name and numbers")
 H.callbacks["MDW_Combat_Row_name_6"].click()
-check(H.sent[#H.sent] == "target #6" and H.sentEcho[#H.sentEcho] == false,
+check(H.sent[#H.sent] == "target #6" and H.sentEcho[#H.sent] == false,
   "clicking an enemy name targets it with the # prefix, silently")
 check(mdw.promptGauges.enemy.text._echoed[1]:find("a goblin 30/40", 1, true) ~= nil,
   "prompt bar enemy gauge tracks the live target")
+-- The rows are the whole panel: a per-beat repaint has no console text to
+-- clear under them, on this widget or on the Group one the same push feeds.
+do
+  local combatClears = combat.content._clears or 0
+  local groupClears = groupWidget.content._clears or 0
+  raiseEvent("gmcp.Group.Vitals")
+  check((combat.content._clears or 0) == combatClears
+    and (groupWidget.content._clears or 0) == groupClears,
+    "per-beat row repaints leave the consoles under the rows alone")
+end
 
 -- The player tabs back to Character mid-fight: per-beat pushes must neither
 -- snap the tab back (the switch is transition-gated, unlike the web's
@@ -872,7 +934,8 @@ mdw.selectStackTab(charStack, "Character")
 -- Auto-target: current target (5) leaves the list, wolf (6) remains
 gmcp.Char.Combat.Enemies = { { id = 6, name = "a wolf", health = 10, health_max = 25 } }
 raiseEvent("gmcp.Char.Combat.Enemies")
-check(H.sent[#H.sent] == "target #6", "auto-target re-targets the surviving enemy")
+check(H.sent[#H.sent] == "target #6" and H.sentEcho[#H.sent] == false,
+  "auto-target re-targets the surviving enemy, silently - the player typed none of it")
 check(charStack.activeMember == "Character",
   "mid-fight pushes leave the player's tab choice alone")
 check(H.labels["MDW_Combat_Row_name_6"]._shown == false,
@@ -1223,7 +1286,7 @@ raiseEvent("gmcp.Char.Audio")
 local offRow = row("Sound is off - click to turn it on")
 check(offRow ~= nil, "sound off is said, under the rows it silences")
 offRow.onClick()
-check(H.sent[#H.sent] == "config sound on" and H.sentEcho[#H.sentEcho] == false,
+check(H.sent[#H.sent] == "config sound on" and H.sentEcho[#H.sent] == false,
   "and that one IS a real typed command, sent silently")
 gmcp.Char.Audio.sound = true
 raiseEvent("gmcp.Char.Audio")
@@ -1508,6 +1571,14 @@ check(questPlain:find("Grain Thief") == nil and questPlain:find("Nothing nearby"
   "leaving the zone empties the Here section")
 gmcp.Room = { Info = { Basic = { area = "Fields" } } }
 raiseEvent("gmcp.Room.Info.Basic")
+-- ...and Room.Info.Basic arrives on EVERY step: one that stays inside the
+-- zone has nothing to repaint.
+do
+  local questClears = quests.content._clears or 0
+  raiseEvent("gmcp.Room.Info.Basic")
+  check((quests.content._clears or 0) == questClears,
+    "a step inside the same zone leaves the Quests widget alone")
+end
 
 findLink(quests.content, "Wolves").cb()
 check(H.labels["MDW_ContextMenuTitle"]._echoed[1]:find("%[8%] Wolves") ~= nil,
@@ -1702,8 +1773,25 @@ raiseEvent("gmcp.Room.Info.Basic")
 journalPlain = joined(journal):gsub("<[%d,]+>", ""):gsub("</?[biruso]>", "")
 check(journalPlain:find("Grain Thief") and journalPlain:find("Something stirs"),
   "moving into the zone repaints the current-zone rows")
+do
+  local journalClears = journal.content._clears or 0
+  raiseEvent("gmcp.Room.Info.Basic")
+  check((journal.content._clears or 0) == journalClears,
+    "a step inside the same zone leaves the journal alone")
+end
 findLink(journal.content, "Current zone").cb()
 H.callbacks["MDW_ContextMenuItem1"].click() -- back to "All zones"
+-- Without the Current zone filter the journal reads no zone at all, so even
+-- crossing into another one leaves it as it is.
+do
+  local journalClears = journal.content._clears or 0
+  gmcp.Room = { Info = { Basic = { area = "Elsewhere" } } }
+  raiseEvent("gmcp.Room.Info.Basic")
+  check((journal.content._clears or 0) == journalClears,
+    "under All zones even a zone change leaves the journal alone")
+  gmcp.Room = { Info = { Basic = { area = "Fields" } } }
+  raiseEvent("gmcp.Room.Info.Basic")
+end
 
 -- The completed list is OMITTED from progress-only pushes (guide 5.9): the
 -- cached copy must survive, or the history vanishes mid-session.
@@ -1807,6 +1895,13 @@ check(pjEntry:find("Heard from Fintan", 1, true)
   "the entry's provenance lines render")
 findLink(pjournal.content, "next page").cb()
 check(joined(pjournal):find("Day 2. Tracks.", 1, true) ~= nil, "the book pager turns the page")
+-- A plain entry takes the same prose path as a book page: escapes become
+-- breaks, and a blank line stays one.
+gmcp.Char.Journal.Entry = { id = 12, index = 1, title = "The Dark Forest Vol. 1",
+  is_book = false, available = true, category = "books", content = "First line.\\n\\nThird line." }
+raiseEvent("gmcp.Char.Journal.Entry", "gmcp.Char.Journal.Entry")
+check(joined(pjournal):gsub("<[%d,]+>", ""):find("First line.\n\n  Third line.", 1, true) ~= nil,
+  "a plain entry's prose keeps its breaks and its blank line")
 
 -- A counts push means "re-request the category you are showing", and it must
 -- drop the entry cache with it (content can have been rewritten).
@@ -1834,12 +1929,48 @@ local linkCountBefore = #eq.content._links
 mdw.refreshWidgetContent(eq)
 check(#eq.content._links == linkCountBefore and linkCountBefore > 0,
   "reflow re-renders equipment links from state")
+-- A renderer that throws is caught, so one bad payload costs one panel's
+-- paint, and MDW's debug line names the package and the widget it hit.
+do
+  local probe = { name = "Probe" }
+  mdwui.bindRenderer(probe, function() error("boom") end)
+  local wasDebug, mainBefore = mdw.debugMode, #H.main._echoed
+  mdw.debugMode = true
+  probe.reflow()
+  mdw.debugMode = wasDebug
+  check(table.concat(H.main._echoed, "", mainBefore + 1)
+    :find(mdwui.packageName .. " render error in Probe", 1, true) ~= nil,
+    "a failing renderer is caught and reported under the package's own name")
+end
 
 -- 9. Copyover triggers a fresh full payload
 local sentBefore = #H.gmcpSent
 raiseEvent("gmcp.Engine.Copyover")
 check(H.gmcpSent[#H.gmcpSent]:find("SendFullPayload") ~= nil and #H.gmcpSent == sentBefore + 1,
   "copyover re-requests the full payload")
+
+-- 9b. A new character session (guide 8.16): Engine.Reset is the first packet
+-- of every login. Mudlet's gmcp table outlives a logout, and combat is only
+-- pushed during a fight, so a character that logged out mid-fight would hand
+-- that fight to the next one. The table is wiped whole, as the guide
+-- prescribes and the web client does, and the fight stops painting.
+do
+  local fixture = gmcp
+  gmcp = { Char = { Combat = {
+    Enemies = { { id = 5, name = "a goblin", health = 3, health_max = 40 } },
+    Target = { id = 5, name = "a goblin", hp_current = 3, hp_max = 40 },
+  } } }
+  raiseEvent("gmcp.Char.Combat.Enemies")
+  check(mdwui.state.inCombat and combat._rows["name_5"] ~= nil, "the last character logged out mid-fight")
+  raiseEvent("gmcp.Engine.Reset")
+  check(next(gmcp) == nil, "Engine.Reset wipes the previous character's GMCP data")
+  check(not mdwui.state.inCombat and combat._rows["idle"] ~= nil and combat._rows["name_5"] == nil,
+    "and the Combat widget stops painting their fight")
+  check(mdw.promptGauges.enemy.text._echoed[1] == "No Enemy", "as does the prompt bar's enemy gauge")
+  gmcp = fixture
+  mdwui.renderCombat()
+  mdwui.updatePromptGauges()
+end
 
 -- 10. Numpad walking (web client input.js codeShortcuts). It ships as the
 -- package's own native key folder, so the checks are on the JSON Mudlet
@@ -2054,6 +2185,8 @@ local beforeUnknownPart = #H.gmcpSent
 check(uiRun("refresh nosuch"):find("Nothing called", 1, true) ~= nil
   and #H.gmcpSent == beforeUnknownPart,
   "an unknown part names the ones that exist and asks for nothing")
+check(uiRun("help refresh"):find("comm room group map connection.", 1, true) ~= nil,
+  "ui help refresh lists every part the verb takes, connection included")
 
 -- Diagnostics: what a bug report needs, and the payload behind a widget.
 local debugOut = uiRun("debug")
@@ -2379,9 +2512,9 @@ H.flushTimers()
 check(table.concat(H.main._echoed):find("Type ui for", 1, true) == nil,
   "the one-time hint does not repeat on later builds")
 
--- 10c. The self-updater (Update.lua). The feed is the package's OWN
--- CHANGELOG.md read from GitHub - no manifest, no URLs in the data - and the
--- download URL is built from the release contract in Config. The stub
+-- 10c. The self-updater (Update.lua). The feed is releases.json on the game
+-- server - generated from CHANGELOG.md at release time, no URLs in the data -
+-- and the package comes from one fixed path beside it (Config). The stub
 -- records downloads instead of performing them, so every step here is driven
 -- by writing the file Mudlet would have written and raising the event Mudlet
 -- would have raised.
@@ -2395,9 +2528,8 @@ local function aheadBy(steps)
 end
 local V_LATEST, V_NEXT, V_INSTALLED = aheadBy(2), aheadBy(1), mdwui.version
 -- The feed is the game server's releases.json, newest entry first - the same
--- shape the mapper package ships against. It is JSON now, not the changelog:
--- the server copies releases/releases.json out of this repo on every push to
--- main, so the file the player reads is generated, never hand-edited.
+-- shape the mapper package ships against. It is generated from the changelog
+-- and published as a release asset, never hand-edited.
 local function feedJson(entries)
   local out = {}
   for _, e in ipairs(entries) do
@@ -2420,9 +2552,8 @@ local FEED = feedJson({
 local releases = mdwui.parseReleases(FEED)
 check(#releases == 3 and releases[1].version == V_LATEST and releases[1].date == "2026-09-01"
   and releases[3].version == V_INSTALLED, "the feed parser reads releases newest-first, with dates")
-check(releases[1].notes[1].kind == "bullet"
-  and releases[1].notes[1].text == "A big new thing with code in it",
-  "changes become bullets, and inline markdown is stripped from the text")
+check(releases[1].notes[1] == "A big new thing with code in it",
+  "changes become note lines, and inline markdown is stripped from the text")
 -- Remote text arrives from a server that could be having a bad day. Every one
 -- of these is skipped rather than thrown: an error inside the download handler
 -- would cost the player the update path entirely.
@@ -2962,6 +3093,10 @@ mdwui.setNumpadWalking(false) -- read back from the layout file after setup
 -- rebuilds the row from its declared styles, so a surviving memo would make
 -- the first payload after a build skip the restyle it needs.
 mdwui.state.aeTrackCss = "stale"
+-- The prompt bar is MDW's, and every setup builds a NEW console: a prompt the
+-- old one showed must still be written into the new one, unchanged or not.
+gmcp.Char.Vitals = { prompt2 = "carrying 4/20" }
+raiseEvent("gmcp.Char.Vitals")
 mdw.teardown()
 check(mdwui.state.aeTrackCss == nil, "MDW teardown clears the prompt-gauge memos")
 check(H.nativeKeys["Numpad Walking"] == false,
@@ -2977,6 +3112,8 @@ mdw.setup()
 H.flushTimers()
 check(mdw.widgets["Combat"] ~= nil and mdw.widgets["Comm"] ~= nil,
   "widgets rebuilt after an MDW update")
+check(joined(mdw.promptBar):find("carrying 4/20", 1, true) ~= nil,
+  "the rebuilt prompt bar shows the prompt again, though its text never changed")
 check(mdw.widgets["Equipment"].stackId ~= nil, "grouping restored after update")
 -- Heights survive a full MDW setup, and are still not MDW's default. This is
 -- the ordering trap: MDW auto-fills the BOTTOM row of a dock, and a stack

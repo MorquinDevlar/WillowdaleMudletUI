@@ -51,6 +51,18 @@ installed even when the build was refused under an old MDW.
 - Panels are PURE FUNCTIONS of Mudlet's `gmcp` table: clear the console,
   repaint from the latest payloads. Safe to call anytime, with any subset of
   data present. Keep them that way - no incremental DOM-style patching.
+  What is skipped is the CALL, never part of a paint: `Room.Info.Basic`
+  arrives on every step, so its handler repaints the zone-keyed widgets only
+  when the zone differs from the one each last DREW with (recorded by the
+  renders, not the handler - a handler-side memo misses a repaint driven by
+  anything else), the prompt bar is only rewritten when its text or its
+  console changed, and the 1s ticker repaints Affects only while a duration
+  counts down.
+- `gmcp.Engine.Reset` (guide 8.16) WIPES the whole `gmcp` table, as the guide
+  prescribes and the web client does - the one place this package writes to
+  it, and the only file `.luacheckrc` lets do so. It is shared with every other
+  package in the profile (the mapper included), and the new character's data
+  arrives right behind the reset.
 - Panel renderers write DIRECTLY to `widget.content` and are bound as the
   widget's `reflow` via `mdwui.bindRenderer`. Never route panel output through
   `widget:echo`/`:decho`: MDW's echo buffer cannot replay clickable links, so
@@ -363,7 +375,10 @@ The feed is GENERATED at release time, never hand-edited and never committed -
 `tools/changelog_to_releases.lua` turns `CHANGELOG.md` into it, so the notes a
 player is shown and the notes in the repo cannot drift apart. Its shape is the
 game server's, shared with the mapper package: a JSON array, newest first, of
-`{ version, released, changes[] }`. The heading pattern's digit class excludes
+`{ version, released, changes[] }`, plus `mdw` on the newest entry - the MDW
+that release requires, read from `mdwui.minMdwVersion`, which the updater
+installs FIRST (`mdwui.requiredMdwVersion`) so the new package never lands on a
+framework its build gate refuses. The heading pattern's digit class excludes
 `## Unreleased` in the generator exactly as it did in the package's old
 parser - work that is in no release must never be offered as one.
 

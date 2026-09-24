@@ -11,9 +11,9 @@ cut, instead of being reconstructed from the git log after the fact.
 leaves a fresh empty `## Unreleased` behind, and publishes the promoted body
 verbatim as the GitHub release notes.
 
-Installed clients read this file too: the package fetches the raw copy from
-`main` and shows the matching `## X.Y.Z` section when it finds a newer
-release. Everything written here is text a player will eventually be shown.
+Installed clients read this file too: every release turns it into the update
+feed (releases.json), and the updater shows a newer release's notes from it.
+Everything written here is text a player will eventually be shown.
 
 **A dated `## X.Y.Z` section is published history: never edit one.** The
 update feed is REGENERATED from this whole file on every release, so changing
@@ -23,12 +23,19 @@ whatever bullet happens to sit below it, because the last release promoted
 those bullets into the section above. `tools/release.sh` refuses to release
 when a released section no longer matches the copy at its tag.
 
-The release tag format `vX.Y.Z` and the asset name
-`WillowdaleMudletUI.mpackage` are a contract - the in-package updater builds
-`https://github.com/MorquinDevlar/WillowdaleMudletUI/releases/download/vX.Y.Z/WillowdaleMudletUI.mpackage`
-out of the version number alone - so neither may change.
+The release tag format `vX.Y.Z` and the asset names
+`WillowdaleMudletUI.mpackage` and `releases.json` are a contract - publishing a
+release is what deploys it, and the game server's release handler finds the two
+assets by name - so none of them may change.
 
 ## Unreleased
+
+### Changed
+- Auto-targeting the next enemy no longer echoes its command into your main window.
+- Walking and fighting redraw far less of the UI, most of all with the Journal open on Quests.
+
+### Fixed
+- Switching characters no longer leaves the previous character's fight in the Combat widget and prompt bar.
 
 ## 0.5.4 - 2026-09-21
 

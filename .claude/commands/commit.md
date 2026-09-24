@@ -11,9 +11,8 @@ CRITICAL: Read and follow EVERY instruction in this file exactly. Do not fall ba
   Claude Code commands never get an entry - anyone interested reads the code
 - NEVER bump the version here. `mfile` and `mdwui.version` move only in
   `tools/release.sh`: the in-package updater compares `mdwui.version` against
-  the tags on GitHub, so a version bumped outside a release would make every
-  installed client believe it is already up to date with a release that does
-  not exist
+  the release feed, so a version bumped outside a release names a release that
+  does not exist
 - NEVER commit `build/` - it is gitignored, and the built `.mpackage` ships as
   a GitHub release asset, not as a tracked file
 - Follow the execution order step by step
@@ -152,7 +151,7 @@ Keep it neutral, factual, and technical.
 
 ### Release Process
 
-Releases are cut by `tools/release.sh X.Y.Z` and only by it. The script bumps `mfile` and `mdwui.version`, promotes `## Unreleased` to `## X.Y.Z - <date>`, runs smoke/luacheck/muddle, commits "Release X.Y.Z", tags `vX.Y.Z`, pushes main (unpushed commits from this session ride along), and publishes the GitHub release with `build/WillowdaleMudletUI.mpackage`. The tag format and the asset name are a contract: the in-package updater constructs `https://github.com/MorquinDevlar/WillowdaleMudletUI/releases/download/vX.Y.Z/WillowdaleMudletUI.mpackage` from the version alone and reads the notes from `CHANGELOG.md` raw on main.
+Releases are cut by `tools/release.sh X.Y.Z` and only by it. The script bumps `mfile` and `mdwui.version`, promotes `## Unreleased` to `## X.Y.Z - <date>`, runs smoke/luacheck/muddle, generates the feed, commits "Release X.Y.Z", tags `vX.Y.Z`, pushes main (unpushed commits from this session ride along), and publishes the GitHub release with `build/WillowdaleMudletUI.mpackage` and `releases.json` attached. Publishing is the deploy: the game server's release handler downloads both assets by name, so the tag format and the two asset names are a contract.
 
 1. Read the current version from `mfile` (`"version": "X.Y.Z"`).
 2. Use **AskUserQuestion**: "Cut a release now?" with options (compute the concrete numbers into the labels):
