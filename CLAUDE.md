@@ -501,3 +501,20 @@ message keeps the manual URL for that case.
 Comments explain WHY, not what - constraints the code cannot show, usually a
 guide section number or a web-client behavior being matched. Don't extract a
 function for something just as clear written inline.
+
+## Developing with agents
+
+- The main session plans, designs and reviews, whatever model it runs on (Fable
+  5.1 by default). Code is written by the `implementer` agent
+  (`.claude/agents/implementer.md`, `model: opus`, effort `xhigh`), started with
+  the Agent tool and a self-contained brief: the agreed plan, the files
+  involved, the rules of this file that bear on it, and what done means. The
+  agent does not see the conversation.
+- Exceptions the main session does itself: trivial edits (a few lines, a config
+  or data tweak, a doc fix), and reading, planning and review of any size. A
+  main session that itself runs Opus may write the code directly, since the code
+  is Opus's either way.
+- The main session reviews the agent's change before anything is reported done,
+  stages by explicit path and commits it; the agent never commits, stages,
+  pushes or deploys. `CHANGELOG.md` and the version stay with the main session
+  too - see `/commit` and "Releases and self-update" above.
