@@ -241,11 +241,10 @@ end
 -- The whole sound surface, in the place the web client puts it. See the file
 -- header for the row-for-row mapping and the one shape that cannot match.
 --
--- GUARDED on the function's existence rather than gated by
--- mdwui.minMdwVersion, unlike the other MDW calls in buildUI: this API is
--- newer than the pinned minimum, so a player on the pin gets the UI without
--- the menu instead of a refused build. Raise the pin and this guard becomes
--- decoration, but it costs one `if`.
+-- GUARDED on the function's existence although mdwui.minMdwVersion covers it
+-- now: setupSoundMenu also runs from the Game.Music and Char.Audio handlers,
+-- which fire under any MDW - the one the version gate refused to build on
+-- included.
 ---------------------------------------------------------------------------
 
 -- The muted state is spelled out in the button rather than drawn: the header

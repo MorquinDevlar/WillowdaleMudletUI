@@ -37,7 +37,7 @@ idempotent - `Widget:new` returns existing widgets, re-running must not
 duplicate anything, and a re-run must not re-apply first-run defaults over
 what is already placed.
 
-MDW >= `mdwui.minMdwVersion` (0.9.3) is a HARD requirement, gated ONCE at the
+MDW >= `mdwui.minMdwVersion` is a HARD requirement, gated ONCE at the
 top of `mdwui.buildUI()` via `mdwui.mdwSatisfied()` - before any side effect,
 so a refused build leaves the session untouched - instead of guarding every
 MDW 0.4 call site. Bump the constant when adopting a newer MDW API - and with
@@ -274,9 +274,9 @@ for this menu rather than working around a row with one click.
 `mdwui.setupSoundMenu` (Music.lua) declares it from `buildUI` the same way, and
 `mdwui.onUninstall` withdraws it by hand for the same reason
 (`mdw.gameHeaderMenus` outlives a teardown too). It is the ONE MDW call in
-`buildUI` that is guarded on existence rather than covered by the version
-gate - `mdw.addHeaderMenu` is newer than `mdwui.minMdwVersion`, and a player
-on the pin must get the UI without the menu rather than a refused build. Two
+`buildUI` that is guarded on existence as well as covered by the version
+gate: `setupSoundMenu` also runs from the `Game.Music` and `Char.Audio`
+handlers, which fire under any MDW, a refused one included. Two
 things about it are load-bearing: MUTE is Mudlet's own
 `setConfig("muteMediaGame")`, never a volume of zero through GMCP, because the
 web client mutes client-side too and a zero would overwrite the levels the

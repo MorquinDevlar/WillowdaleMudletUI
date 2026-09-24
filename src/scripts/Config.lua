@@ -98,7 +98,13 @@ mdwui.version = "0.5.4"
 -- chance for the reason 0.9.1 gives: MDW never updates itself, so a behavior
 -- this package does not require is one no player ever gets, and the
 -- Connection panel is the only float this package creates.
-mdwui.minMdwVersion = "0.9.4"
+--
+-- 0.9.5 is not an API adoption either. MDW stopped re-applying a row's or a
+-- prompt gauge's value, label and position when nothing changed - most of what
+-- a combat beat cost, since the Combat widget and the prompt row repaint on
+-- every push. Pinned for the reason 0.9.1 gives: MDW never updates itself, so
+-- an improvement this package does not require is one no player ever gets.
+mdwui.minMdwVersion = "0.9.5"
 -- The MDW release this package installs when MDW is missing or too old
 -- (mdwui.ensureMdw, Update.lua). Mudlet has NO package dependency
 -- resolution - the mfile "dependencies" field is read by the package exporter
