@@ -102,8 +102,9 @@ function mdwui.renderCombat()
     rows[#rows + 1] = { id = id, type = "text", height = g.headerHeight,
       fontSize = g.headerFontSize, text = string.format("<%s>%s", C.charLabel, text) }
   end
-  -- `backCss` is a finished stylesheet, not a color: the AE track carries the
-  -- bound slice as a gradient, so there is no single color to hand over.
+  -- `backCss` is a finished stylesheet, not a color: the HP track carries the
+  -- barrier and the AE track the bound slice as a gradient, so there is no
+  -- single color to hand over.
   local function gaugeRow(id, value, max, text, fill, backCss)
     rows[#rows + 1] = { id = id, type = "gauge", value = value, max = max,
       text = text, front = mdwui.fillCss(fill), back = backCss,
@@ -150,10 +151,8 @@ function mdwui.renderCombat()
 
   header("hdr_player", "PLAYER:")
   if s.hp then
-    local hp, hpMax = tonumber(vitals.health) or 0, tonumber(vitals.health_max) or 0
-    gaugeRow("hp", hp, hpMax,
-      string.format("HP %s/%s", mdwui.fmtNum(hp), mdwui.fmtNum(hpMax)),
-      mdwui.hpFillColor(hp, hpMax), mdwui.trackCss(g.hpTrack))
+    local value, max, text, track = mdwui.hpGauge(vitals)
+    gaugeRow("hp", value, max, text, mdwui.hpFillColor(vitals.health, vitals.health_max), track)
   end
   if s.ae then
     local value, max, text, track = mdwui.aeGauge(vitals)
@@ -341,10 +340,11 @@ function mdwui.setupPromptGauges()
   mdw.setPromptGauges(defs)
   -- Fresh gauges carry the styles just declared, so the memos start AS the
   -- declaration: the update below then restyles only what has already moved
-  -- away from it (a low band, a held reserve) instead of re-applying the
-  -- declaration on every build and every menu toggle.
+  -- away from it (a low band, a standing barrier, a held reserve) instead of
+  -- re-applying the declaration on every build and every menu toggle.
   mdwui.state.hpFillCss = g.hpFill
   mdwui.state.balFillCss = g.balFill
+  mdwui.state.hpTrackCss = mdwui.trackCss(g.hpTrack)
   mdwui.state.aeTrackCss = mdwui.trackCss(g.aeTrack)
   mdwui.updatePromptGauges()
 end
@@ -357,14 +357,19 @@ function mdwui.updatePromptGauges()
   local char = (gmcp and gmcp.Char) or {}
   local vitals = char.Vitals or {}
 
-  local hp, hpMax = tonumber(vitals.health) or 0, tonumber(vitals.health_max) or 0
-  mdw.setPromptGaugeValue("hp", hp, hpMax,
-    string.format("HP %s/%s", mdwui.fmtNum(hp), mdwui.fmtNum(hpMax)))
+  local hpValue, hpMax, hpText, hpTrack = mdwui.hpGauge(vitals)
+  mdw.setPromptGaugeValue("hp", hpValue, hpMax, hpText)
   -- Band restyles only on crossings - Vitals can arrive 10/sec (guide 4).
-  local fill = mdwui.hpFillColor(hp, hpMax)
+  local fill = mdwui.hpFillColor(vitals.health, vitals.health_max)
   if fill ~= mdwui.state.hpFillCss then
     mdwui.state.hpFillCss = fill
     mdw.setPromptGaugeStyle("hp", mdwui.fillCss(fill))
+  end
+  -- The track only when the barrier segment moves, for the same reason; with
+  -- no barrier standing it never does.
+  if hpTrack ~= mdwui.state.hpTrackCss then
+    mdwui.state.hpTrackCss = hpTrack
+    mdw.setPromptGaugeStyle("hp", nil, hpTrack)
   end
 
   local aeValue, aeMax, aeText, aeTrack = mdwui.aeGauge(vitals)

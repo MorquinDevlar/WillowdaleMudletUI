@@ -30,6 +30,9 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+### Added
+- The HP gauges in `Combat` and the prompt bar show a barrier as a purple stretch after your health.
+
 ### Changed
 - A narrow top bar drops its versions one at a time, the mapper's first and the UI's last.
 

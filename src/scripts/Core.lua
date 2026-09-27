@@ -174,6 +174,69 @@ function mdwui.aeGauge(vitals)
     g.aeReserved, g.frame)
 end
 
+--- One gradient stop at an integer position in ten-thousandths, the ends
+-- written as aeGauge writes them.
+local function gaugeStop(pos, color)
+  if pos <= 0 then return "stop:0 " .. color end
+  if pos >= 10000 then return "stop:1 " .. color end
+  return string.format("stop:%.4f %s", pos / 10000, color)
+end
+
+--- The HP gauge as both surfaces draw it, in aeGauge's shape: the value the
+-- FILL takes, the scale it is drawn against, the label, and the track CSS
+-- (guide 5.1 `barrier`, the web client's barrier segment). A standing
+-- absorption barrier extends the bar rather than overlaying it: its segment
+-- starts where the fill ends, and once health plus barrier passes the
+-- maximum the bar is scaled to that sum and the segment reaches the full end.
+-- So at full health the fill gives the barrier room, and grows back as the
+-- barrier drains. The fill COLOUR is not this scale's business: callers band
+-- it from the true share (mdwui.hpFillColor). No barrier returns the value,
+-- maximum, label and plain track byte for byte, so everyone without one
+-- keeps the gauge they have always had; the field is absent on an older
+-- server and 0 for everyone without a barrier.
+--
+-- The segment lives in the track's brush for the reasons on aeGauge, each
+-- boundary two stops one ten-thousandth apart. An edge is the integer product
+-- divided once, never a ratio scaled afterwards, so a boundary that falls
+-- exactly on a ten-thousandth lands on it instead of one below.
+function mdwui.hpGauge(vitals)
+  local g = mdwui.config.gauges
+  vitals = vitals or {}
+  local cur = tonumber(vitals.health) or 0
+  local max = tonumber(vitals.health_max) or 0
+  local barrier = tonumber(vitals.barrier) or 0
+  if barrier <= 0 or max <= 0 then
+    return cur, max, string.format("HP %s/%s", mdwui.fmtNum(cur), mdwui.fmtNum(max)),
+      mdwui.trackCss(g.hpTrack)
+  end
+  local text = string.format("HP %s/%s +%s", mdwui.fmtNum(cur), mdwui.fmtNum(max),
+    mdwui.fmtNum(barrier))
+  local hp = math.max(cur, 0)
+  local scale = math.max(max, hp + barrier)
+  local e1 = math.floor(hp * 10000 / scale)
+  local e2 = math.floor((hp + barrier) * 10000 / scale)
+  -- A barrier too thin to reach the next ten-thousandth has no segment to draw.
+  if e2 <= e1 then return hp, scale, text, mdwui.trackCss(g.hpTrack) end
+  -- Stops at one position collapse in Qt, so a segment one step wide, or one
+  -- ending a step short of the full end, emits the shared stop once.
+  local stops = {}
+  local from = 0
+  if e1 > 0 then
+    stops[#stops + 1] = gaugeStop(0, g.hpTrack)
+    stops[#stops + 1] = gaugeStop(e1, g.hpTrack)
+    from = e1 + 1
+  end
+  stops[#stops + 1] = gaugeStop(from, g.hpBarrier)
+  if e2 > from then stops[#stops + 1] = gaugeStop(e2, g.hpBarrier) end
+  if e2 < 10000 then
+    stops[#stops + 1] = gaugeStop(e2 + 1, g.hpTrack)
+    if e2 + 1 < 10000 then stops[#stops + 1] = gaugeStop(10000, g.hpTrack) end
+  end
+  return hp, scale, text, string.format(
+    "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, %s); %s",
+    table.concat(stops, ", "), g.frame)
+end
+
 --- Group-member fill color (gmcp-ui.js groupHealthClass bands: 75/40/15).
 function mdwui.grpFillColor(cur, max)
   local g = mdwui.config.gauges

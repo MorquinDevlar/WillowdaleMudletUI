@@ -203,6 +203,13 @@ mdwui.config = {
     hpFill = "rgba(60,160,80,60%)",
     hpFillMid = "rgba(200,160,40,60%)",
     hpFillLow = "rgba(220,60,50,70%)",
+    -- The absorption barrier on the health pool (mdwui.hpGauge), in aether
+    -- purple so what the barrier adds never reads as health. The web draws
+    -- it as a translucent panel laid over the HP track
+    -- (rgba(140,70,200,0.45)) plus a white diagonal hatch; like aeReserved
+    -- below, this is those two web colors already composited into the one
+    -- brush a Qt track has, minus the hatch.
+    hpBarrier = "rgba(120,82,172,56%)",
     aeTrack = "rgba(120,50,160,20%)",
     aeFill = "rgba(140,70,200,60%)",
     -- The bound slice of the aether pool (mdwui.aeGauge). The web draws
@@ -368,10 +375,11 @@ mdwui.state = mdwui.state or {
   -- top bar's connection timer counts up from; refreshed by
   -- sysConnectionEvent, seeded at build as a fallback for mid-session
   -- installs.
-  -- hpFillCss / balFillCss / aeTrackCss (runtime): the last-applied
-  -- prompt-gauge styles - the two fill colours, and the AE track carrying the
-  -- bound slice - so the per-payload updates only restyle on a band crossing
-  -- or a move of the reserve. Seeded by setupPromptGauges with what it just
+  -- hpFillCss / balFillCss / hpTrackCss / aeTrackCss (runtime): the
+  -- last-applied prompt-gauge styles - the two fill colours, the HP track
+  -- carrying the barrier and the AE track carrying the bound slice - so the
+  -- per-payload updates only restyle on a band crossing or a move of the
+  -- barrier or the reserve. Seeded by setupPromptGauges with what it just
   -- declared, and cleared by the mdw.onTeardown hook with the gauges they
   -- describe.
   -- promptText / promptConsole (runtime): the prompt bar text last written,
@@ -491,10 +499,11 @@ mdw.onTeardown[mdwui.packageName] = function()
   -- MDW rebuilds the row from its DECLARED styles before onReady runs. A memo
   -- that outlived its gauge would make the first payload after a build that
   -- never reached setupPromptGauges (an error earlier in buildUI, or the
-  -- version gate refusing) skip the restyle a low band or a held reserve
-  -- needs.
+  -- version gate refusing) skip the restyle a low band, a standing barrier
+  -- or a held reserve needs.
   if mdwui and mdwui.state then
-    mdwui.state.hpFillCss, mdwui.state.balFillCss, mdwui.state.aeTrackCss = nil, nil, nil
+    mdwui.state.hpFillCss, mdwui.state.balFillCss = nil, nil
+    mdwui.state.hpTrackCss, mdwui.state.aeTrackCss = nil, nil
   end
 end
 

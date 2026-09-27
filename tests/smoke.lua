@@ -641,6 +641,101 @@ do
   check(aeBar.back._css == mdwui.trackCss(g.aeTrack),
     "releasing the reserve puts the plain track back")
 end
+-- The absorption barrier on the health pool (guide 5.1 `barrier`). The
+-- fixture carries no such field - an older server sends none - so the
+-- untouched gauge proves a player without a barrier keeps exactly the HP bar
+-- this package has always drawn.
+do
+  local hpBar = mdw.promptGauges.hp
+  local g = mdwui.config.gauges
+  local v = gmcp.Char.Vitals
+  local function gradient(...)
+    return "background-color: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+      .. table.concat({ ... }, ", ") .. "); " .. g.frame
+  end
+  check(v.barrier == nil and hpBar.back._css == mdwui.trackCss(g.hpTrack)
+    and hpBar.text._echoed[1] == "HP 80/120" and hpBar._value == 80 and hpBar._max == 120,
+    "an HP pool with no barrier keeps the plain track and label")
+  do
+    local a = { mdwui.hpGauge({ health = 80, health_max = 120 }) }
+    local b = { mdwui.hpGauge({ health = 80, health_max = 120, barrier = 0 }) }
+    check(a[1] == b[1] and a[2] == b[2] and a[3] == b[3] and a[4] == b[4]
+      and a[4] == mdwui.trackCss(g.hpTrack) and a[3] == "HP 80/120",
+      "a missing barrier field reads exactly as a barrier of 0")
+  end
+  -- Count the track restyles the prompt gauge asks MDW for: Vitals arrives up
+  -- to ten times a second, and the track is constant between barrier moves.
+  local realStyle = mdw.setPromptGaugeStyle
+  local trackStyles = 0
+  mdw.setPromptGaugeStyle = function(id, front, back, text)
+    if id == "hp" and back ~= nil then trackStyles = trackStyles + 1 end
+    return realStyle(id, front, back, text)
+  end
+  -- Room under the maximum: the bar keeps its true scale, and the barrier's
+  -- segment starts exactly where the fill ends, with track after it.
+  v.health, v.health_max, v.barrier = 20, 100, 30
+  raiseEvent("gmcp.Char.Vitals")
+  check(hpBar._value == 20 and hpBar._max == 100 and hpBar.text._echoed[1] == "HP 20/100 +30",
+    "a barrier with room keeps the fill on the true maximum and names itself in the label")
+  check(hpBar.back._css == gradient("stop:0 " .. g.hpTrack, "stop:0.2000 " .. g.hpTrack,
+      "stop:0.2001 " .. g.hpBarrier, "stop:0.5000 " .. g.hpBarrier,
+      "stop:0.5001 " .. g.hpTrack, "stop:1 " .. g.hpTrack),
+    "the barrier segment runs right after the fill, then the track")
+  check(trackStyles == 1, "raising a barrier restyles the HP track once")
+  raiseEvent("gmcp.Char.Vitals")
+  check(trackStyles == 1, "an unchanged barrier does not restyle it again")
+  -- Past the top: the bar scales to health plus barrier, so a full pool gives
+  -- the barrier room and the segment reaches the full end.
+  v.health, v.health_max, v.barrier = 58, 58, 12
+  raiseEvent("gmcp.Char.Vitals")
+  check(hpBar._value == 58 and hpBar._max == 70 and hpBar.text._echoed[1] == "HP 58/58 +12",
+    "a barrier past the maximum scales the bar to health plus barrier")
+  check(hpBar.back._css == gradient("stop:0 " .. g.hpTrack, "stop:0.8285 " .. g.hpTrack,
+      "stop:0.8286 " .. g.hpBarrier, "stop:1 " .. g.hpBarrier),
+    "and its segment runs to the full end")
+  check(trackStyles == 2, "a moved barrier restyles the track")
+  -- The fill band comes from the true share: 50 of 100 is the mid band, while
+  -- 50 of the 200 the bar is drawn against would be the low one.
+  v.health, v.health_max, v.barrier = 50, 100, 150
+  raiseEvent("gmcp.Char.Vitals")
+  check(hpBar._value == 50 and hpBar._max == 200
+    and hpBar.front._css == mdwui.fillCss(g.hpFillMid),
+    "the HP fill keeps the band of health against its true maximum")
+  -- Every edge case keeps its stops increasing and inside the bar: a segment
+  -- one step wide, one ending a step short of the full end, one from an empty
+  -- pool, one filling the whole bar.
+  do
+    local cases = {
+      { 20, 100, 30 }, { 58, 58, 12 }, { 0, 100, 40 }, { 0, 100, 100 },
+      { 1, 10000, 1 }, { 9998, 10000, 1 }, { 50000, 50000, 1 }, { -5, 100, 20 },
+    }
+    local sane = true
+    for _, c in ipairs(cases) do
+      local _, _, _, css = mdwui.hpGauge({ health = c[1], health_max = c[2], barrier = c[3] })
+      local last, count = -1, 0
+      for pos in css:gmatch("stop:([%d%.]+) ") do
+        pos = tonumber(pos)
+        if not pos or pos <= last or pos > 1 then sane = false end
+        last, count = pos or last, count + 1
+      end
+      if count < 2 or not css:find(g.hpBarrier, 1, true) then sane = false end
+    end
+    check(sane, "barrier stops always increase and stay within the bar")
+    local _, _, _, edge = mdwui.hpGauge({ health = 57, health_max = 100, barrier = 10 })
+    check(edge:find("stop:0.5700 " .. g.hpTrack, 1, true) ~= nil
+      and edge:find("stop:0.5701 " .. g.hpBarrier, 1, true) ~= nil,
+      "an edge exactly on a ten-thousandth lands on it: 57 of 100 is 0.5700, not 0.5699")
+    local value, max, _, css = mdwui.hpGauge({ health = 10000, health_max = 30000, barrier = 1 })
+    check(value == 10000 and max == 30000 and css == mdwui.trackCss(g.hpTrack),
+      "a barrier too thin for a ten-thousandth falls back to the plain track")
+  end
+  v.health, v.health_max, v.barrier = 80, 120, nil
+  raiseEvent("gmcp.Char.Vitals")
+  check(hpBar.back._css == mdwui.trackCss(g.hpTrack) and hpBar.text._echoed[1] == "HP 80/120"
+    and hpBar._value == 80 and hpBar._max == 120 and trackStyles == 4,
+    "a broken barrier puts the plain HP track back")
+  mdw.setPromptGaugeStyle = realStyle
+end
 raiseEvent("gmcp.Char.Balance")
 local balGauge = mdw.promptGauges.balance
 check(balGauge.text._echoed[1] == "1.5s" and balGauge._value == 2 and balGauge._max == 4,
@@ -1091,6 +1186,28 @@ do
 end
 H.callbacks["MDW_ContextMenuItem2"].click() -- back off for the later sections
 check(combat._rows["ae"] == nil, "AE gauge leaves when toggled off")
+-- The widget's HP row draws the barrier out of the same helper as the prompt
+-- gauge, so the two surfaces cannot disagree about it, and bands its fill
+-- from the true share: 90 of 120 is the healthy band, 90 of the 180 the bar
+-- is drawn against would be the mid one.
+do
+  local g = mdwui.config.gauges
+  local v = gmcp.Char.Vitals
+  local row = combat._rows["hp"]
+  check(row.back == mdwui.trackCss(g.hpTrack) and row.el.text._echoed[1] == "HP 80/120",
+    "the widget's HP row starts on the plain track")
+  v.health, v.barrier = 90, 90
+  raiseEvent("gmcp.Char.Vitals")
+  check(row.el._value == 90 and row.el._max == 180 and row.el.text._echoed[1] == "HP 90/120 +90"
+    and row.back == mdw.promptGauges.hp.backCSS and row.back ~= mdwui.trackCss(g.hpTrack),
+    "the combat widget's HP row carries the same barrier as the prompt gauge")
+  check(row.front == mdwui.fillCss(g.hpFill), "and bands its fill from health against its true maximum")
+  v.health, v.barrier = 80, nil
+  raiseEvent("gmcp.Char.Vitals")
+  check(row.el._value == 80 and row.el._max == 120 and row.el.text._echoed[1] == "HP 80/120"
+    and row.back == mdwui.trackCss(g.hpTrack),
+    "a broken barrier puts the widget row back on the plain track")
+end
 
 -- The companion's bar (a Shaman's spirit beast fights beside them). Its
 -- health rides Group.Vitals and nothing else, so that push repaints the
@@ -3297,13 +3414,14 @@ mdwui.setNumpadWalking(false) -- read back from the layout file after setup
 -- The prompt-gauge memos must not outlive the gauges they describe: MDW
 -- rebuilds the row from its declared styles, so a surviving memo would make
 -- the first payload after a build skip the restyle it needs.
-mdwui.state.aeTrackCss = "stale"
+mdwui.state.hpTrackCss, mdwui.state.aeTrackCss = "stale", "stale"
 -- The prompt bar is MDW's, and every setup builds a NEW console: a prompt the
 -- old one showed must still be written into the new one, unchanged or not.
 gmcp.Char.Vitals = { prompt2 = "carrying 4/20" }
 raiseEvent("gmcp.Char.Vitals")
 mdw.teardown()
-check(mdwui.state.aeTrackCss == nil, "MDW teardown clears the prompt-gauge memos")
+check(mdwui.state.hpTrackCss == nil and mdwui.state.aeTrackCss == nil,
+  "MDW teardown clears the prompt-gauge memos")
 check(H.nativeKeys["Numpad Walking"] == false,
   "numpad folder stays disabled through the teardown gap")
 check(#tickerIds > 0 and #mdwui.state.timers == 0,
