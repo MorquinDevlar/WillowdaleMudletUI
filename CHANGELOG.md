@@ -30,6 +30,8 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+## 0.5.8 - 2026-09-27
+
 ### Added
 - The HP gauges in `Combat` and the prompt bar show a barrier as a purple stretch after your health.
 
