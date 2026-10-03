@@ -1145,6 +1145,43 @@ check(invText:find("4 out of 20 items.", 1, true) and invText:find("─"),
 check(findLink(inv.content, "red potion").hint
   == "red potion\nConsumable (Potion)\nUse: Quaff",
   "inventory row hint carries the web tooltip box")
+-- A tattoo's tooltip names the slot it fills, sent as the item's `slot`
+-- (guide 5.5), where the raw type would say "Ring". Every other item sends an
+-- empty slot and the live server none at all, and those keep today's line.
+do
+  local function ring(name, slot, subType)
+    return { id = "!40:" .. name, name = name, type = "ring", sub_type = subType,
+      slot = slot, details = {}, command = "wear", quantity = 1, uses = 0 }
+  end
+  gmcp.Char.Inventory.Worn = { ringmainhand = ring("wing back tattoo", "Back ink", "tattoo") }
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  check(findLink(eq.content, "wing back tattoo").hint
+    == "wing back tattoo\nBack ink (Tattoo)\nUse: Remove",
+    "a worn tattoo's tooltip names its slot, Back ink (Tattoo), not Ring (Tattoo)")
+  gmcp.Char.Inventory.Worn = wornFixture
+  raiseEvent("gmcp.Char.Inventory.Worn")
+
+  local backpackItems = gmcp.Char.Inventory.Backpack.Items
+  gmcp.Char.Inventory.Backpack.Items = {
+    ring("wing back tattoo", "Back ink", "tattoo"),
+    ring("blank slot ring", "", "tattoo"),
+    ring("no slot ring", nil, "tattoo"),
+    ring("numbered slot ring", 7, "tattoo"),
+    ring("bare face tattoo", "Face ink", nil),
+  }
+  raiseEvent("gmcp.Char.Inventory.Backpack.Items")
+  local function hint(name) return findLink(inv.content, name).hint end
+  check(hint("wing back tattoo") == "wing back tattoo\nBack ink (Tattoo)\nUse: Wear",
+    "and so does one in the backpack")
+  check(hint("blank slot ring") == "blank slot ring\nRing (Tattoo)\nUse: Wear"
+    and hint("no slot ring") == "no slot ring\nRing (Tattoo)\nUse: Wear"
+    and hint("numbered slot ring") == "numbered slot ring\nRing (Tattoo)\nUse: Wear",
+    "an empty, missing or non-string slot leaves the Type (Subtype) line as it was")
+  check(hint("bare face tattoo") == "bare face tattoo\nFace ink\nUse: Wear",
+    "and a slot with no sub_type stands alone")
+  gmcp.Char.Inventory.Backpack.Items = backpackItems
+  raiseEvent("gmcp.Char.Inventory.Backpack.Items")
+end
 -- Each item's OWN command is its action, whatever the item is - the same rule
 -- that decides whether the forage bag offers Eat.
 findLink(inv.content, "Rusty Sword").cb()
@@ -1166,18 +1203,43 @@ findLink(inv.content, "red potion").cb()
 H.callbacks["MDW_ContextMenuItem3"].click()
 check(H.sent[#H.sent] == "drop !21:bb", "menu Drop sends with the item id")
 
--- Sell gates on Room.Info.Basic.environment and is decided when the menu
--- OPENS: entering a shop adds the row with no inventory repaint in between.
+-- Sell gates on Room.Info.Basic.shop - a merchant in the room, the check the
+-- sell command makes - and is decided when the menu OPENS: entering a shop
+-- adds the row with no inventory repaint in between.
 findLink(inv.content, "red potion").cb()
 check(H.labels["MDW_ContextMenuItem4"] == nil, "no Sell row outside a shop")
 mdw.closeAllMenus()
-gmcp.Room = { Info = { Basic = { environment = "Shop" } } }
+gmcp.Room = { Info = { Basic = { environment = "Shop", shop = true } } }
 findLink(inv.content, "red potion").cb()
 check(H.labels["MDW_ContextMenuItem4"] ~= nil
   and H.labels["MDW_ContextMenuItem4"]._echoed[1]:find("Sell") ~= nil,
   "entering a shop adds Sell at menu-open without a repaint")
 H.callbacks["MDW_ContextMenuItem4"].click()
 check(H.sent[#H.sent] == "sell !21:bb", "menu Sell sends with the item id")
+-- The flag, never the biome: `environment` names the terrain, and a merchant
+-- trades wherever it stands while an empty shop-biome room buys nothing. Only
+-- a real boolean true opens the row.
+do
+  local function sellOffered(basic)
+    mdw.closeAllMenus()
+    gmcp.Room = { Info = { Basic = basic } }
+    findLink(inv.content, "red potion").cb()
+    local row = H.labels["MDW_ContextMenuItem4"]
+    local offered = row ~= nil and row._echoed[1]:find("Sell") ~= nil
+    mdw.closeAllMenus()
+    return offered
+  end
+  check(sellOffered({ environment = "Forest", shop = true }),
+    "a merchant in a forest room offers Sell")
+  check(not sellOffered({ environment = "Shop", shop = false }),
+    "a shop-biome room with no merchant does not")
+  check(not sellOffered({ environment = "Shop" }),
+    "nor does one whose payload carries no shop flag")
+  check(not sellOffered({ environment = "Shop", shop = "true" })
+    and not sellOffered({ environment = "Shop", shop = 1 }),
+    "and a shop flag that is a string or a number is not a merchant")
+  gmcp.Room = { Info = { Basic = { environment = "Shop", shop = true } } }
+end
 
 -- Keyring: the web client's keychain table (updateKeychainList) - header
 -- row over a rule, "#roomid location", capitalized right-aligned exit.
@@ -3613,6 +3675,9 @@ check(joined(mdw.widgets["Keyring"]):find("keyring is empty"), "null keyring ren
 check(joined(mdw.widgets["Equipment"]):find("-nothing-", 1, true) ~= nil,
   "null worn map renders all slots empty")
 check(mdwui.inShop() == false, "null room shape reads as not-a-shop")
+gmcp.Room.Info.Basic = { environment = "Shop", shop = NULL }
+check(mdwui.inShop() == false, "and so does a null shop flag, whatever the biome")
+gmcp.Room.Info.Basic = NULL
 check(joined(mdw.widgets["Quests"]):find("No tracked quests") ~= nil
   and joined(mdw.widgets["Quests"]):find("Nothing nearby") ~= nil,
   "null quest lists and room render both empty quest sections")

@@ -30,6 +30,12 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+### Changed
+- Tattoo tooltips in `Equipment` and `Inventory` name the slot the tattoo fills, such as Back ink.
+
+### Fixed
+- Item menus offer Sell in every room with a merchant, and only there.
+
 ## 0.5.10 - 2026-10-03
 
 ### Changed

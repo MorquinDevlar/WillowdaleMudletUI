@@ -352,12 +352,15 @@ function mdwui.chevron(co, stateTable, key, expandable, hint, rerender)
   return open
 end
 
---- True while the current room is a shop (Room.Info.Basic.environment,
--- guide 5.14) - gates the item menus' Sell row. tbl-guarded per field: the
--- Room packages carry the same nil-marshaling history as the Char ones.
+--- True while a merchant is in the current room (Room.Info.Basic.shop, guide
+-- 5.14) - gates the item menus' Sell row, as the web client does. The flag,
+-- never the biome: `environment` names the terrain, so a merchant in a forest
+-- clearing buys and an empty shop-biome room does not, which is the check the
+-- sell command itself makes. Only a real true counts. tbl-guarded per field:
+-- the Room packages carry the same nil-marshaling history as the Char ones.
 function mdwui.inShop()
   local basic = mdwui.tbl(mdwui.tbl(mdwui.tbl(gmcp and gmcp.Room).Info).Basic)
-  return basic.environment == "Shop"
+  return basic.shop == true
 end
 
 --- Emit a clickable name that opens MDW's context menu - the web client's
@@ -388,9 +391,15 @@ end
 -- adds its detail flags and "Use: Remove"; inventory "Use: <command>" and
 -- "Uses: N"). Plain text - Mudlet shows link hints as native Qt tooltips,
 -- this UI's stand-in for the web .item-tooltip box.
+--
+-- A tattoo's `slot` (guide 5.5) takes the type's place, as sent and not
+-- title-cased: a back tattoo's type is "ring", which names the slot it borrows
+-- rather than anything the player wears, so it reads "Back ink (Tattoo)".
+-- Every other item sends an empty slot, and an older server none at all.
 function mdwui.itemTooltip(item, extra)
   local lines = { item.name or "?" }
   local t = mdwui.titleCase(item.type or "")
+  if type(item.slot) == "string" and item.slot ~= "" then t = item.slot end
   if item.sub_type and item.sub_type ~= "" then
     t = string.format("%s (%s)", t, mdwui.titleCase(item.sub_type))
   end

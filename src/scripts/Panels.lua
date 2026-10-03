@@ -481,8 +481,9 @@ local function renderItemList(co, items, isForage)
     local verb = (item.command and item.command ~= "")
       and (item.command:gsub("^%l", string.upper)) or nil
     -- A function, so the list is built when the menu OPENS: the Sell row
-    -- depends on the room the player is in by then, and rooms change
-    -- without any inventory push repainting this list.
+    -- depends on whether the room the player is in by then holds a merchant
+    -- (mdwui.inShop), and rooms change without any inventory push repainting
+    -- this list.
     local actions = function()
       local list = {}
       -- No special case for the ingredient bag any more. An item that is meant
