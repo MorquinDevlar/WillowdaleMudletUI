@@ -913,6 +913,129 @@ check(H.sent[#H.sent] == "remove weapon" and H.sentEcho[#H.sent] == false,
 check(mdw.menus.context == false and H.labels["MDW_ContextMenuItem1"] == nil,
   "context menu closes after acting")
 
+-- Slot labels: the payload's own `labels` object names each row, because a
+-- Weaver's gear is tattoos - the weapon, offhand and ring slots read Hand,
+-- Chest, Back and Face ink. The label column widens to the longest name
+-- ("Chest ink:" is 10) and the Att:/Lvl: headers move with it; a payload with
+-- no `labels` at all, an older server's, keeps the 9-wide rows above.
+do
+  local defaults = { weapon = "Mainhand", offhand = "Offhand", head = "Head", neck = "Neck",
+    body = "Body", back = "Back", belt = "Belt", gloves = "Gloves", ringmainhand = "Mainhand",
+    ringoffhand = "Offhand", legs = "Legs", feet = "Feet" }
+  local function visibleLines()
+    local lines = {}
+    for line in (joined(eq):gsub("<%d+,%d+,%d+>", "")):gmatch("([^\n]*)\n") do
+      lines[#lines + 1] = line
+    end
+    return lines
+  end
+  -- Every slot row is its label right-aligned in `width` columns and a space,
+  -- walked in wornSections order with the section headers and blank lines
+  -- between - so a stray row anywhere shifts every line after it.
+  local function rowsRead(width, names)
+    local lines, i = visibleLines(), 0
+    for si, section in ipairs(mdwui.config.wornSections) do
+      if si > 1 then
+        i = i + 1
+        if lines[i] ~= "" then return false end
+      end
+      i = i + 1
+      if (lines[i] or ""):sub(1, #section.header + 1) ~= section.header .. ":" then return false end
+      for _, slot in ipairs(section.slots) do
+        i = i + 1
+        local text = names[slot[1]] .. ":"
+        if (lines[i] or ""):sub(1, width + 1) ~= string.rep(" ", width - #text) .. text .. " " then
+          return false
+        end
+      end
+    end
+    return #lines == i
+  end
+
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  local noLabels = joined(eq)
+  check(rowsRead(9, defaults),
+    "a payload with no labels keeps every config label, right-aligned in 9 columns")
+  wornFixture.labels = defaults
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  check(joined(eq) == noLabels,
+    "and the server's default labels render byte for byte what no labels did")
+
+  local function tattoo(itemType, name, att, lvl)
+    return { id = "!40:" .. itemType, name = name, type = itemType, sub_type = "tattoo",
+      details = {}, command = "wear", attunement = att, item_level = lvl }
+  end
+  local weaver = { weapon = "Hand ink", offhand = "Chest ink", head = "Head", neck = "Neck",
+    body = "Body", back = "Back", belt = "Belt", gloves = "Gloves", ringmainhand = "Back ink",
+    ringoffhand = "Face ink", legs = "Legs", feet = "Feet" }
+  gmcp.Char.Inventory.Worn = {
+    weapon = tattoo("weapon", "thorn hand tattoo", 100, 12),
+    offhand = tattoo("offhand", "oak chest tattoo", 75, 3),
+    ringmainhand = tattoo("ring", "wing back tattoo", 50, 8),
+    ringoffhand = tattoo("ring", "owl face tattoo", 25, 10),
+    gloves = { name = "disabled" },
+    labels = weaver,
+  }
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  local wvText = joined(eq):gsub("<%d+,%d+,%d+>", "")
+  local wvLines = visibleLines()
+  local function wvRow(pattern)
+    for _, line in ipairs(wvLines) do
+      if line:find(pattern, 1, true) then return line end
+    end
+    return ""
+  end
+  check(wvRow("thorn hand tattoo"):find(" Hand ink: 100%  (12)  thorn hand tattoo", 1, true) == 1
+    and wvRow("oak chest tattoo"):find("Chest ink:  75%   (3)  oak chest tattoo", 1, true) == 1
+    and wvRow("wing back tattoo"):find(" Back ink:  50%   (8)  wing back tattoo", 1, true) == 1
+    and wvRow("owl face tattoo"):find(" Face ink:  25%  (10)  owl face tattoo", 1, true) == 1,
+    "a Weaver's tattoo slots read Hand, Chest, Back and Face ink beside their tattoos")
+  check(wvText:find("Mainhand:", 1, true) == nil and wvText:find("Offhand:", 1, true) == nil,
+    "and no row still says Mainhand or Offhand")
+  check(rowsRead(10, weaver),
+    "the label column widens to the 10 that Chest ink: fills, every label right-aligned in it")
+  local wvHead = wvLines[1]
+  check(wvHead == "Weapons:   Att:  Lvl:", "the column headers step right with the labels")
+  check(wvRow("thorn hand tattoo"):find("100%", 1, true) == wvHead:find("Att:", 1, true)
+    and wvRow("oak chest tattoo"):find(" 75%", 1, true) == wvHead:find("Att:", 1, true),
+    "so Att: still starts on the percentage column")
+  check(wvRow("thorn hand tattoo"):find("(12)", 1, true) == wvHead:find("Lvl:", 1, true),
+    "and Lvl: on the level column")
+  local nameCol = wvRow("thorn hand tattoo"):find("thorn", 1, true)
+  check(wvRow("oak chest tattoo"):find("oak", 1, true) == nameCol
+    and wvRow("owl face tattoo"):find("owl", 1, true) == nameCol
+    and wvRow("Head:"):find("-nothing-", 1, true) == nameCol
+    and wvRow("Gloves:"):find("-disabled-", 1, true) == nameCol,
+    "every name, -nothing- and -disabled- still starts on one column")
+  check(not wvText:lower():find("labels", 1, true) and #eq.content._links == 4,
+    "labels is never drawn as a row or offered as an item")
+
+  -- Mudlet merges the next Worn payload into the table it already holds, and
+  -- the server resends all twelve names on a class change: overwriting the
+  -- Weaver's entries in place is exactly what leaving the class does.
+  for key, name in pairs(defaults) do gmcp.Char.Inventory.Worn.labels[key] = name end
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  local backText = joined(eq):gsub("<%d+,%d+,%d+>", "")
+  check(rowsRead(9, defaults) and not backText:find(" ink:", 1, true)
+    and backText:find("\nMainhand: 100%  (12)  thorn hand tattoo", 1, true) ~= nil
+    and visibleLines()[1] == "Weapons:  Att:  Lvl:",
+    "default labels after a Weaver's put Mainhand and Offhand back at 9 columns")
+
+  -- One slot at a time: an empty or non-string name falls back to the config
+  -- label without taking the rest of the server's names with it.
+  gmcp.Char.Inventory.Worn.labels = { weapon = "", offhand = 7, ringmainhand = "Back ink" }
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  local mixed = {}
+  for key, name in pairs(defaults) do mixed[key] = name end
+  mixed.ringmainhand = "Back ink"
+  check(rowsRead(9, mixed),
+    "an empty or non-string label falls back to the config label for that slot alone")
+
+  wornFixture.labels = nil
+  gmcp.Char.Inventory.Worn = wornFixture
+  raiseEvent("gmcp.Char.Inventory.Worn")
+end
+
 -- Inventory: the web client's numbered list (updateInventoryList) with the
 -- "N out of max items." footer over a rule; rows carry the item tooltip.
 raiseEvent("gmcp.Char.Inventory.Backpack.Items")

@@ -30,6 +30,9 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+### Changed
+- `Equipment` names a Weaver's tattoo slots Hand ink, Chest ink, Back ink and Face ink.
+
 ## 0.5.8 - 2026-09-27
 
 ### Added

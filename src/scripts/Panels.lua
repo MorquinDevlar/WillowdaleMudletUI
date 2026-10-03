@@ -317,31 +317,55 @@ local function attColor(att)
   return C.attune0
 end
 
+-- The row label: the server's own `labels` entry for the slot when it sent a
+-- usable one, else the config label. The server names the slots per class - a
+-- Weaver's tattoos read "Hand ink" on the weapon slot - and an older server
+-- sends no `labels` at all.
+local function slotLabel(labels, slot)
+  local label = labels[slot[1]]
+  if type(label) == "string" and label ~= "" then return label end
+  return slot[2]
+end
+
 function mdwui.renderEquipment()
   local widget = mdwui.w("Equipment")
   if not widget then return end
   local C = mdwui.config.colors
   local worn = mdwui.tbl(gmcp and gmcp.Char and gmcp.Char.Inventory and gmcp.Char.Inventory.Worn)
+  -- `labels` sits beside the twelve slot keys in the same payload and is
+  -- never looked up as an item: rows are walked from wornSections, not from
+  -- the payload. Read on every paint, never kept: Mudlet merges the next
+  -- payload into this same table, and the server resends all twelve names on
+  -- a class change, which is what puts Mainhand back after a Weaver.
+  local labels = mdwui.tbl(worn.labels)
   local co = widget.content
   co:clear()
 
+  -- The label column is as wide as the longest "Label:" this paint renders,
+  -- never under the 9 that "Mainhand:" fills (a Weaver's "Chest ink:" takes
+  -- 10), right-aligned (.eq-label) with one space after it - so the
+  -- percentage field starts on column labelW+2 and the level on labelW+8.
+  --
   -- Column headers over the attunement and level fields, the web client's
   -- .eq-attune-head and .eq-ilvl-head spans inside the Weapons .eq-header
   -- row: rendered ONLY when some row will actually show a percentage, since
   -- the columns are blank on empty slots and headers over all-blank columns
   -- read as broken. They ride the FIRST section header instead of a line of
   -- their own, matching the game's own terminal display - "Weapons:" fills
-  -- columns 1-8 and the two spaces take 9-10, so "Att:" lands on 11-14 over
-  -- the "100%" field, and two more spaces put "Lvl:" on 17-20 over the level
-  -- tokens (9-wide label plus a space, percentage on 11-14, level on 17-20).
-  -- They take the section-header parchment (C.charHeader), one voice with
-  -- the "Weapons:" beside them - the values keep their own colors.
+  -- columns 1-8 and spaces run to labelW+1, so "Att:" lands on the "100%"
+  -- field, and two more spaces put "Lvl:" over the level tokens. At the
+  -- default width of 9 that is "Att:" on 11-14 and "Lvl:" on 17-20; at 10,
+  -- 12-15 and 18-21. They take the section-header parchment (C.charHeader),
+  -- one voice with the "Weapons:" beside them - the values keep their own
+  -- colors.
   local anyAttuned = false
+  local labelW = 9
   for _, section in ipairs(mdwui.config.wornSections) do
     for _, slot in ipairs(section.slots) do
       local item = worn[slot[1]]
       local att = tonumber(item and item.attunement)
       if att and att > 0 then anyAttuned = true end
+      labelW = math.max(labelW, #slotLabel(labels, slot) + 1)
     end
   end
 
@@ -349,14 +373,17 @@ function mdwui.renderEquipment()
     if si > 1 then co:decho("\n") end -- .eq-section spacing
     local attHead = ""
     if si == 1 and anyAttuned then
-      attHead = string.format("  <%s>Att:  Lvl:", C.charHeader)
+      attHead = string.format("%s<%s>Att:  Lvl:",
+        string.rep(" ", labelW - #section.header), C.charHeader)
     end
     co:decho(string.format("<%s>%s:%s\n", C.charHeader, section.header, attHead))
     for _, slot in ipairs(section.slots) do
-      local key, slotLabel = slot[1], slot[2]
+      local key = slot[1]
       local item = worn[key]
-      -- 9 fits the longest label ("Mainhand:"), right-aligned (.eq-label)
-      local label = string.format("<%s>%9s ", C.charGold, slotLabel .. ":")
+      -- Padded by hand rather than a %Ns width: the width comes from server
+      -- text, and string.format throws on a width of three digits.
+      local text = slotLabel(labels, slot) .. ":"
+      local label = string.format("<%s>%s%s ", C.charGold, string.rep(" ", labelW - #text), text)
       -- Attunement: the share of an item's power the character channels,
       -- on every occupied slot and banded by quarter (attColor) - a color for
       -- full strength only means anything if full strength prints. 0, and a
