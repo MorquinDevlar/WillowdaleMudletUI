@@ -21,9 +21,10 @@ Left dock                      Center            Right dock
 - **Equipment / Inventory / Keyring / Forage** - clickable item lists (look,
   use with each item's own verb, drop, remove); worn gear shows its attunement
   percentage, color-banded by how much of the item you channel, and its item
-  level. Equipment rows carry the slot names the game sends, so a Weaver's
-  tattoo slots read Hand ink, Chest ink, Back ink and Face ink, and they change
-  back when the character takes up another class
+  level. Equipment rows carry the slot names and sections the game sends, so a
+  Weaver's four tattoo slots read Hand ink, Chest ink, Back ink and Face ink
+  under a Tattoos section, and they change back when the character takes up
+  another class
 - **Quests** - the quests you are tracking, plus anything turn-in-able in this
   zone, with track toggles and lazy per-quest detail
 - **Journal** - the whole `journal` command: books, documents, rumors,

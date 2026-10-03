@@ -913,15 +913,28 @@ check(H.sent[#H.sent] == "remove weapon" and H.sentEcho[#H.sent] == false,
 check(mdw.menus.context == false and H.labels["MDW_ContextMenuItem1"] == nil,
   "context menu closes after acting")
 
--- Slot labels: the payload's own `labels` object names each row, because a
+-- Slot labels and sections: the payload's own `labels` object names each row
+-- and its `sections` object the header each row sits under, because a
 -- Weaver's gear is tattoos - the weapon, offhand and ring slots read Hand,
--- Chest, Back and Face ink. The label column widens to the longest name
--- ("Chest ink:" is 10) and the Att:/Lvl: headers move with it; a payload with
--- no `labels` at all, an older server's, keeps the 9-wide rows above.
+-- Chest, Back and Face ink, all four under Tattoos. The label column widens
+-- to the longest name ("Chest ink:" is 10) and the Att:/Lvl: headers move with
+-- it; a payload with neither, an older server's, keeps the 9-wide rows above.
 do
   local defaults = { weapon = "Mainhand", offhand = "Offhand", head = "Head", neck = "Neck",
     body = "Body", back = "Back", belt = "Belt", gloves = "Gloves", ringmainhand = "Mainhand",
     ringoffhand = "Offhand", legs = "Legs", feet = "Feet" }
+  local function sectionsFor(tattoos)
+    return { weapon = tattoos or "Weapons", offhand = tattoos or "Weapons", head = "Armor",
+      neck = "Jewelry", body = "Armor", back = "Armor", belt = "Armor", gloves = "Armor",
+      ringmainhand = tattoos or "Jewelry", ringoffhand = tattoos or "Jewelry", legs = "Armor",
+      feet = "Armor" }
+  end
+  local configLayout = {}
+  for _, section in ipairs(mdwui.config.wornSections) do
+    local keys = {}
+    for _, slot in ipairs(section.slots) do keys[#keys + 1] = slot[1] end
+    configLayout[#configLayout + 1] = { section.header, keys }
+  end
   local function visibleLines()
     local lines = {}
     for line in (joined(eq):gsub("<%d+,%d+,%d+>", "")):gmatch("([^\n]*)\n") do
@@ -930,20 +943,25 @@ do
     return lines
   end
   -- Every slot row is its label right-aligned in `width` columns and a space,
-  -- walked in wornSections order with the section headers and blank lines
-  -- between - so a stray row anywhere shifts every line after it.
-  local function rowsRead(width, names)
+  -- walked in the expected layout's order (wornSections unless one is given)
+  -- with the section headers and blank lines between - so a stray, missing or
+  -- regrouped row anywhere shifts every line after it. Only the first header
+  -- may carry anything after its colon, and then only the column headers.
+  local function rowsRead(width, names, layout)
     local lines, i = visibleLines(), 0
-    for si, section in ipairs(mdwui.config.wornSections) do
+    for si, section in ipairs(layout or configLayout) do
+      local head = section[1] .. ":"
       if si > 1 then
         i = i + 1
         if lines[i] ~= "" then return false end
       end
       i = i + 1
-      if (lines[i] or ""):sub(1, #section.header + 1) ~= section.header .. ":" then return false end
-      for _, slot in ipairs(section.slots) do
+      if lines[i] ~= head and not (si == 1 and (lines[i] or ""):find("^" .. head .. " +Att:  Lvl:$")) then
+        return false
+      end
+      for _, key in ipairs(section[2]) do
         i = i + 1
-        local text = names[slot[1]] .. ":"
+        local text = names[key] .. ":"
         if (lines[i] or ""):sub(1, width + 1) ~= string.rep(" ", width - #text) .. text .. " " then
           return false
         end
@@ -960,6 +978,10 @@ do
   raiseEvent("gmcp.Char.Inventory.Worn")
   check(joined(eq) == noLabels,
     "and the server's default labels render byte for byte what no labels did")
+  wornFixture.sections = sectionsFor(nil)
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  check(joined(eq) == noLabels,
+    "as do the default sections on top - Weapons, Armor, Jewelry and the rings under Jewelry")
 
   local function tattoo(itemType, name, att, lvl)
     return { id = "!40:" .. itemType, name = name, type = itemType, sub_type = "tattoo",
@@ -968,6 +990,9 @@ do
   local weaver = { weapon = "Hand ink", offhand = "Chest ink", head = "Head", neck = "Neck",
     body = "Body", back = "Back", belt = "Belt", gloves = "Gloves", ringmainhand = "Back ink",
     ringoffhand = "Face ink", legs = "Legs", feet = "Feet" }
+  -- Labels without sections first: the server that shipped `labels` alone
+  -- (the 0.5.9 contract) still gets the config grouping, Back and Face ink
+  -- under Jewelry, row for row.
   gmcp.Char.Inventory.Worn = {
     weapon = tattoo("weapon", "thorn hand tattoo", 100, 12),
     offhand = tattoo("offhand", "oak chest tattoo", 75, 3),
@@ -1010,16 +1035,87 @@ do
   check(not wvText:lower():find("labels", 1, true) and #eq.content._links == 4,
     "labels is never drawn as a row or offered as an item")
 
+  -- With sections: the slots keep wornSections' order and group by the header
+  -- each one names, the sections in order of first appearance - so the rings
+  -- follow the weapon pair into Tattoos and Neck is all Jewelry has left.
+  local weaverLayout = {
+    { "Tattoos", { "weapon", "offhand", "ringmainhand", "ringoffhand" } },
+    { "Armor", { "head", "body", "back", "belt", "gloves", "legs", "feet" } },
+    { "Jewelry", { "neck" } },
+  }
+  gmcp.Char.Inventory.Worn.sections = sectionsFor("Tattoos")
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  local tatText = joined(eq):gsub("<%d+,%d+,%d+>", "")
+  wvLines = visibleLines()
+  check(rowsRead(10, weaver, weaverLayout),
+    "a Weaver's sections put the four ink rows under Tattoos, seven under Armor and Neck alone under Jewelry")
+  check(wvRow("thorn hand tattoo"):find(" Hand ink: 100%  (12)  thorn hand tattoo", 1, true) == 1
+    and wvRow("owl face tattoo"):find(" Face ink:  25%  (10)  owl face tattoo", 1, true) == 1,
+    "with each tattoo still beside its own ink row")
+  local tatHead = wvLines[1]
+  check(tatHead == "Tattoos:   Att:  Lvl:"
+    and wvRow("thorn hand tattoo"):find("100%", 1, true) == tatHead:find("Att:", 1, true)
+    and wvRow("wing back tattoo"):find(" 50%", 1, true) == tatHead:find("Att:", 1, true)
+    and wvRow("thorn hand tattoo"):find("(12)", 1, true) == tatHead:find("Lvl:", 1, true),
+    "the column headers ride the Tattoos line, over the percentage and level columns")
+  nameCol = wvRow("thorn hand tattoo"):find("thorn", 1, true)
+  check(wvRow("owl face tattoo"):find("owl", 1, true) == nameCol
+    and wvRow("Neck:"):find("-nothing-", 1, true) == nameCol
+    and wvRow("Gloves:"):find("-disabled-", 1, true) == nameCol,
+    "and every name, -nothing- and -disabled- starts on one column across the regrouped sections")
+  check(not tatText:lower():find("sections", 1, true) and not tatText:lower():find("labels", 1, true)
+    and not tatText:find("Weapons:", 1, true) and #eq.content._links == 4,
+    "sections is never drawn as a row, and only the four worn tattoos are links")
+
+  -- A grouping that does not head every slot is not used at all: the config
+  -- layout stands whole, so no row is dropped or drawn twice, and the labels
+  -- still apply row by row.
+  local function brokenSections(key, value)
+    local sections = sectionsFor("Tattoos")
+    sections[key] = value
+    return sections
+  end
+  for _, bad in ipairs({
+    { brokenSections("feet", nil), "a sections object missing a slot" },
+    { brokenSections("head", ""), "an empty header" },
+    { brokenSections("belt", 3), "a non-string header" },
+    { "Tattoos", "a sections value that is not an object" },
+  }) do
+    gmcp.Char.Inventory.Worn.sections = bad[1]
+    raiseEvent("gmcp.Char.Inventory.Worn")
+    check(rowsRead(10, weaver) and not joined(eq):find("Tattoos", 1, true),
+      bad[2] .. " falls back to the config layout whole")
+  end
+
+  -- The column headers ride the FIRST section's line whatever it is called: a
+  -- header too long to end before the percentage column widens the label
+  -- column instead, so "Att:" never lands anywhere but over the numbers.
+  local longHead = "Tattoos of the weave"
+  gmcp.Char.Inventory.Worn.sections = sectionsFor(longHead)
+  raiseEvent("gmcp.Char.Inventory.Worn")
+  wvLines = visibleLines()
+  check(rowsRead(#longHead + 1, weaver, { { longHead, weaverLayout[1][2] },
+      weaverLayout[2], weaverLayout[3] })
+    and wvLines[1] == longHead .. ": Att:  Lvl:"
+    and wvRow("thorn hand tattoo"):find("100%", 1, true) == wvLines[1]:find("Att:", 1, true),
+    "a first header longer than the labels widens the column, and Att: stays over the percentages")
+
   -- Mudlet merges the next Worn payload into the table it already holds, and
-  -- the server resends all twelve names on a class change: overwriting the
-  -- Weaver's entries in place is exactly what leaving the class does.
+  -- the server resends all twelve names and headers on a class change:
+  -- overwriting the Weaver's entries in place is exactly what leaving the
+  -- class does.
+  gmcp.Char.Inventory.Worn.sections = sectionsFor("Tattoos")
+  raiseEvent("gmcp.Char.Inventory.Worn")
   for key, name in pairs(defaults) do gmcp.Char.Inventory.Worn.labels[key] = name end
+  for key, header in pairs(sectionsFor(nil)) do gmcp.Char.Inventory.Worn.sections[key] = header end
   raiseEvent("gmcp.Char.Inventory.Worn")
   local backText = joined(eq):gsub("<%d+,%d+,%d+>", "")
   check(rowsRead(9, defaults) and not backText:find(" ink:", 1, true)
+    and not backText:find("Tattoos", 1, true)
     and backText:find("\nMainhand: 100%  (12)  thorn hand tattoo", 1, true) ~= nil
     and visibleLines()[1] == "Weapons:  Att:  Lvl:",
-    "default labels after a Weaver's put Mainhand and Offhand back at 9 columns")
+    "default labels and sections after a Weaver's put Mainhand and Offhand back under Weapons, "
+      .. "the rings under Jewelry, at 9 columns")
 
   -- One slot at a time: an empty or non-string name falls back to the config
   -- label without taking the rest of the server's names with it.
@@ -1032,6 +1128,7 @@ do
     "an empty or non-string label falls back to the config label for that slot alone")
 
   wornFixture.labels = nil
+  wornFixture.sections = nil
   gmcp.Char.Inventory.Worn = wornFixture
   raiseEvent("gmcp.Char.Inventory.Worn")
 end

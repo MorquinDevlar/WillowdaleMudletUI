@@ -279,8 +279,9 @@ end
 ---------------------------------------------------------------------------
 -- EQUIPMENT (Char.Inventory.Worn) - guide 5.4
 -- The web client's equipment panel (updateEquipSlot + the .eq-section
--- markup): Weapons/Armor/Jewelry sections, right-aligned gold slot labels,
--- teal item names led by [C][E][Q] flags, "-nothing-"/"-disabled-" empties.
+-- markup): Weapons/Armor/Jewelry sections (or the payload's own grouping),
+-- right-aligned gold slot labels, teal item names led by [C][E][Q] flags,
+-- "-nothing-"/"-disabled-" empties.
 -- Each occupied row is ONE link carrying the item tooltip: Mudlet consoles
 -- have no hover events, so the hand cursor plus the tooltip anywhere on the
 -- line stand in for the web's .eq-slot:hover row highlight.
@@ -327,40 +328,70 @@ local function slotLabel(labels, slot)
   return slot[2]
 end
 
+-- The sections this paint draws. The payload's `sections` names the header
+-- each slot sits under - a Weaver's four tattoo slots share "Tattoos", which
+-- takes the rings out of Jewelry - so the slots are walked in wornSections
+-- order, grouped by that header, and the sections ordered by first
+-- appearance. Grouped only when every slot has a non-empty header: anything
+-- less (an older server sends no `sections`) is wornSections whole, so a
+-- partial payload can never drop or repeat a row.
+local function wornLayout(worn)
+  local sections = mdwui.tbl(worn.sections)
+  local layout, byHeader = {}, {}
+  for _, configSection in ipairs(mdwui.config.wornSections) do
+    for _, slot in ipairs(configSection.slots) do
+      local header = sections[slot[1]]
+      if type(header) ~= "string" or header == "" then return mdwui.config.wornSections end
+      local section = byHeader[header]
+      if not section then
+        section = { header = header, slots = {} }
+        byHeader[header] = section
+        layout[#layout + 1] = section
+      end
+      section.slots[#section.slots + 1] = slot
+    end
+  end
+  return layout
+end
+
 function mdwui.renderEquipment()
   local widget = mdwui.w("Equipment")
   if not widget then return end
   local C = mdwui.config.colors
   local worn = mdwui.tbl(gmcp and gmcp.Char and gmcp.Char.Inventory and gmcp.Char.Inventory.Worn)
-  -- `labels` sits beside the twelve slot keys in the same payload and is
-  -- never looked up as an item: rows are walked from wornSections, not from
-  -- the payload. Read on every paint, never kept: Mudlet merges the next
-  -- payload into this same table, and the server resends all twelve names on
-  -- a class change, which is what puts Mainhand back after a Weaver.
+  -- `labels` and `sections` sit beside the twelve slot keys in the same
+  -- payload and are never looked up as items: rows are wornSections' slots,
+  -- whichever headers they are grouped under, never the payload's keys. Both
+  -- are read on every paint, never kept: Mudlet merges the next payload into
+  -- this same table, and the server resends all twelve of each on a class
+  -- change, which is what puts Mainhand back under Weapons after a Weaver.
   local labels = mdwui.tbl(worn.labels)
+  local layout = wornLayout(worn)
   local co = widget.content
   co:clear()
 
   -- The label column is as wide as the longest "Label:" this paint renders,
   -- never under the 9 that "Mainhand:" fills (a Weaver's "Chest ink:" takes
   -- 10), right-aligned (.eq-label) with one space after it - so the
-  -- percentage field starts on column labelW+2 and the level on labelW+8.
+  -- percentage field starts on column labelW+2 and the level on labelW+8. It
+  -- also leaves the FIRST section's "Header:" a space before the percentage
+  -- field, since the column headers below ride that line.
   --
   -- Column headers over the attunement and level fields, the web client's
   -- .eq-attune-head and .eq-ilvl-head spans inside the Weapons .eq-header
   -- row: rendered ONLY when some row will actually show a percentage, since
   -- the columns are blank on empty slots and headers over all-blank columns
   -- read as broken. They ride the FIRST section header instead of a line of
-  -- their own, matching the game's own terminal display - "Weapons:" fills
-  -- columns 1-8 and spaces run to labelW+1, so "Att:" lands on the "100%"
-  -- field, and two more spaces put "Lvl:" over the level tokens. At the
-  -- default width of 9 that is "Att:" on 11-14 and "Lvl:" on 17-20; at 10,
-  -- 12-15 and 18-21. They take the section-header parchment (C.charHeader),
-  -- one voice with the "Weapons:" beside them - the values keep their own
-  -- colors.
+  -- their own, matching the game's own terminal display - "Weapons:" (or a
+  -- Weaver's "Tattoos:") fills columns 1-8 and spaces run to labelW+1, so
+  -- "Att:" lands on the "100%" field, and two more spaces put "Lvl:" over the
+  -- level tokens. At the default width of 9 that is "Att:" on 11-14 and
+  -- "Lvl:" on 17-20; at 10, 12-15 and 18-21. They take the section-header
+  -- parchment (C.charHeader), one voice with the header beside them - the
+  -- values keep their own colors.
   local anyAttuned = false
-  local labelW = 9
-  for _, section in ipairs(mdwui.config.wornSections) do
+  local labelW = math.max(9, #layout[1].header + 1)
+  for _, section in ipairs(layout) do
     for _, slot in ipairs(section.slots) do
       local item = worn[slot[1]]
       local att = tonumber(item and item.attunement)
@@ -369,7 +400,7 @@ function mdwui.renderEquipment()
     end
   end
 
-  for si, section in ipairs(mdwui.config.wornSections) do
+  for si, section in ipairs(layout) do
     if si > 1 then co:decho("\n") end -- .eq-section spacing
     local attHead = ""
     if si == 1 and anyAttuned then

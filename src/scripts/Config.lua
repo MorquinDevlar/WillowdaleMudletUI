@@ -170,10 +170,14 @@ mdwui.config = {
   -- Char.Inventory.Worn slot keys grouped as the web client's equipment
   -- panel (webclient-pure.html .eq-section markup): section header, then
   -- { wire slot key, display label } rows - the ring slots relabel as
-  -- Mainhand/Offhand under Jewelry there. The labels here are the FALLBACK:
-  -- the payload's own `labels` object (one name per slot key - a Weaver's
-  -- slots are tattoos, "Hand ink" and the rest) wins for every slot it gives
-  -- a non-empty name, and an older server sends none (mdwui.renderEquipment).
+  -- Mainhand/Offhand under Jewelry there. The labels, headers and grouping
+  -- here are the FALLBACK; the slot ORDER is not. The payload's own `labels`
+  -- object (one name per slot key - a Weaver's slots are tattoos, "Hand ink"
+  -- and the rest) wins for every slot it gives a non-empty name. Its
+  -- `sections` object (one header per slot key) regroups these slots, in this
+  -- order, under its headers - a Weaver's four tattoo slots under "Tattoos" -
+  -- but only when it heads every slot here, else this layout stands whole. An
+  -- older server sends neither (mdwui.renderEquipment).
   wornSections = {
     { header = "Weapons", slots = {
       { "weapon", "Mainhand" }, { "offhand", "Offhand" } } },

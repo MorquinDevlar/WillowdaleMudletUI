@@ -30,6 +30,9 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+### Changed
+- `Equipment` groups a Weaver's four tattoo slots under Tattoos, leaving Neck alone under Jewelry.
+
 ## 0.5.9 - 2026-10-03
 
 ### Changed
