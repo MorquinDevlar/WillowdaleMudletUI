@@ -30,6 +30,8 @@ assets by name - so none of them may change.
 
 ## Unreleased
 
+## 0.5.11 - 2026-10-03
+
 ### Changed
 - Tattoo tooltips in `Equipment` and `Inventory` name the slot the tattoo fills, such as Back ink.
 
